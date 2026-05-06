@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { format, differenceInCalendarDays } from 'date-fns';
+import React, { useEffect, useRef, useState } from "react";
+import { format, differenceInCalendarDays } from "date-fns";
 import {
   Plus,
   Trash2,
@@ -11,52 +10,52 @@ import {
   TrendingDown,
   Target,
   PenTool,
-} from 'lucide-react';
+} from "lucide-react";
 
-import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 
-import SignaturePad from './SignaturePad';
+import SignaturePad from "./SignaturePad";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const REQUIRE_PHOTO = false;
+const REQUIRE_SIGNATURE = false;
+const REQUIRE_CAPATAZ = false;
 
 const EMPTY_WORKER = {
-  name: '',
-  role: '',
-  hours: '',
-  executed: '',
+  name: "",
+  role: "",
+  hours: "",
+  executed: "",
 };
 
-const getInitialForm = (userName = '') => ({
-  date: format(new Date(), 'yyyy-MM-dd'),
-  supervisor: userName || '',
-  crew_name: '',
-  executed_today: '',
-  hours_worked: '',
+const getInitialForm = (userName = "") => ({
+  date: format(new Date(), "yyyy-MM-dd"),
+  supervisor: userName || "",
+  crew_name: "",
+  executed_today: "",
+  hours_worked: "",
   has_restriction: false,
-  restriction_detail: '',
-  observations: '',
-  capataz_name: '',
+  restriction_detail: "",
+  observations: "",
+  capataz_name: "",
 });
 
 function buildCrewWorkers(workers) {
   return workers
     .filter((worker) => worker.name?.trim())
     .map((worker) => ({
-      name: worker.name,
-      role: worker.role || '',
+      name: worker.name.trim(),
+      role: worker.role || "",
       hours: Number(worker.hours) || 0,
       executed: Number(worker.executed) || 0,
     }));
@@ -64,7 +63,10 @@ function buildCrewWorkers(workers) {
 
 function calculateTotalHours(formHoursWorked, crewWorkers) {
   if (formHoursWorked) return Number(formHoursWorked);
-  return crewWorkers.reduce((sum, worker) => sum + worker.hours, 0);
+
+  return crewWorkers.reduce((sum, worker) => {
+    return sum + Number(worker.hours || 0);
+  }, 0);
 }
 
 export default function DailyLogForm({
@@ -77,39 +79,31 @@ export default function DailyLogForm({
   const [form, setForm] = useState(getInitialForm(userName));
   const [workers, setWorkers] = useState([]);
   const [photos, setPhotos] = useState([]);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [signatureImage, setSignatureImage] = useState(null);
+  const [error, setError] = useState("");
 
   const fileInputRef = useRef(null);
-
-  const { data: projectWorkers = [] } = useQuery({
-    queryKey: ['projectWorkers', masterItem?.project],
-    enabled: !!masterItem?.project,
-    queryFn: () =>
-      api.get(`/project-workers?project=${encodeURIComponent(masterItem.project)}`),
-  });
-
-  const rosterWorkers = masterItem?.project
-    ? projectWorkers.filter((worker) => worker.project === masterItem.project)
-    : [];
 
   useEffect(() => {
     if (!open) return;
 
     setForm({
       ...getInitialForm(userName),
-      crew_name: masterItem?.crew_name || '',
+      crew_name: masterItem?.crew_name || "",
     });
 
-    if (Array.isArray(masterItem?.crew_members) && masterItem.crew_members.length > 0) {
+    if (
+      Array.isArray(masterItem?.crew_members) &&
+      masterItem.crew_members.length > 0
+    ) {
       setWorkers(
         masterItem.crew_members.map((member) => ({
-          name: member.name || '',
-          role: member.role || '',
-          hours: '',
-          executed: '',
+          name: member.name || "",
+          role: member.role || "",
+          hours: "",
+          executed: "",
         }))
       );
     } else {
@@ -117,10 +111,10 @@ export default function DailyLogForm({
     }
 
     setPhotos([]);
-    setUploadingPhoto(false);
     setSaving(false);
     setShowSignaturePad(false);
     setSignatureImage(null);
+    setError("");
   }, [open, masterItem, userName]);
 
   const updateFormField = (field, value) => {
@@ -128,6 +122,8 @@ export default function DailyLogForm({
       ...prev,
       [field]: value,
     }));
+
+    if (error) setError("");
   };
 
   const addWorker = () => {
@@ -146,60 +142,31 @@ export default function DailyLogForm({
     );
   };
 
-  const addRosterWorker = (worker) => {
-    setWorkers((prev) => [
-      ...prev,
-      {
-        name: worker.name,
-        role: worker.role || '',
-        hours: '',
-        executed: '',
-      },
-    ]);
-  };
-
-  const handlePhotoUpload = async (event) => {
+  const handlePhotoUpload = (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
-    try {
-      setUploadingPhoto(true);
+    const localPhotos = files.map((file) => ({
+      url: URL.createObjectURL(file),
+      description: "",
+      file_name: file.name,
+      is_local_preview: true,
+    }));
 
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_BASE_URL}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || `HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        setPhotos((prev) => [
-          ...prev,
-          {
-            url: data.file_url,
-            description: '',
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error('Error al subir foto:', error);
-      alert('Error al subir foto.');
-    } finally {
-      setUploadingPhoto(false);
-      event.target.value = '';
-    }
+    setPhotos((prev) => [...prev, ...localPhotos]);
+    event.target.value = "";
   };
 
   const removePhoto = (index) => {
-    setPhotos((prev) => prev.filter((_, idx) => idx !== index));
+    setPhotos((prev) => {
+      const photo = prev[index];
+
+      if (photo?.is_local_preview && photo?.url) {
+        URL.revokeObjectURL(photo.url);
+      }
+
+      return prev.filter((_, idx) => idx !== index);
+    });
   };
 
   const updatePhotoDescription = (index, value) => {
@@ -213,8 +180,8 @@ export default function DailyLogForm({
   const getDailyGoalInfo = () => {
     if (!masterItem || !form.executed_today) return null;
 
-    const planned = masterItem.planned_qty || 0;
-    const executed = masterItem.executed_qty || 0;
+    const planned = Number(masterItem.planned_qty || 0);
+    const executed = Number(masterItem.executed_qty || 0);
     const remaining = planned - executed;
 
     if (remaining <= 0) return null;
@@ -254,51 +221,38 @@ export default function DailyLogForm({
   const handleSave = async () => {
     try {
       setSaving(true);
+      setError("");
 
       if (!masterItem) {
-        throw new Error('No hay ítem maestro asociado.');
+        throw new Error("No hay ítem maestro asociado.");
       }
 
-      if (!form.executed_today) {
-        throw new Error('Debe ingresar la cantidad ejecutada hoy.');
+      if (!form.executed_today || Number(form.executed_today) <= 0) {
+        throw new Error("Debe ingresar la cantidad ejecutada hoy.");
       }
 
-      if (photos.length === 0) {
-        throw new Error('Debe cargar al menos una foto del sitio.');
+      if (REQUIRE_PHOTO && photos.length === 0) {
+        throw new Error("Debe cargar al menos una foto del sitio.");
       }
 
-      if (!form.capataz_name?.trim()) {
-        throw new Error('Debe ingresar el nombre del capataz.');
+      if (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) {
+        throw new Error("Debe ingresar el nombre del capataz.");
       }
 
-      if (!signatureImage) {
-        throw new Error('Debe dibujar la firma del capataz.');
+      if (REQUIRE_SIGNATURE && !signatureImage) {
+        throw new Error("Debe dibujar la firma del capataz.");
       }
 
       const crewWorkers = buildCrewWorkers(workers);
       const totalHours = calculateTotalHours(form.hours_worked, crewWorkers);
 
       if (totalHours > 10) {
-        throw new Error('No se pueden registrar más de 10 horas en un día.');
+        throw new Error("No se pueden registrar más de 10 horas en un día.");
       }
 
-      const weekLogs = await api.get(
-        `/daily-logs?project=${encodeURIComponent(masterItem.project)}`
-      );
-
-      const weeklyHours =
-        weekLogs.reduce((sum, log) => sum + (Number(log.hours_worked) || 0), 0) +
-        Number(totalHours);
-
-      if (weeklyHours > 44) {
-        throw new Error(
-          `Supera el límite semanal: ${weeklyHours}h registradas de máximo 44h.`
-        );
-      }
-
-      const log = await onSave({
+      await onSave({
         ...form,
-        crew_name: form.crew_name || masterItem?.crew_name || '',
+        crew_name: form.crew_name || masterItem?.crew_name || "",
         executed_today: Number(form.executed_today),
         hours_worked: totalHours,
         crew_workers: crewWorkers,
@@ -308,25 +262,13 @@ export default function DailyLogForm({
         tower: masterItem.tower,
         floor: masterItem.floor,
         activity: masterItem.activity,
+        photos,
       });
-
-      if (log?.id) {
-        for (const photo of photos) {
-          await api.post('/site-photos', {
-            daily_log_id: log.id,
-            master_item_id: masterItem.id,
-            file_url: photo.url,
-            description: photo.description || '',
-            label: 'reporte_diario',
-            date: form.date,
-          });
-        }
-      }
 
       onClose();
     } catch (error) {
-      console.error('Error al guardar reporte:', error);
-      alert(error.message || 'Error al guardar reporte.');
+      console.error("Error al guardar reporte:", error);
+      setError(error.message || "Error al guardar reporte.");
     } finally {
       setSaving(false);
     }
@@ -334,17 +276,12 @@ export default function DailyLogForm({
 
   const goalInfo = getDailyGoalInfo();
 
-  const availableRosterWorkers = rosterWorkers.filter(
-    (rosterWorker) => !workers.some((worker) => worker.name === rosterWorker.name)
-  );
-
   const isSaveDisabled =
     !form.executed_today ||
-    !form.capataz_name?.trim() ||
-    !signatureImage ||
-    photos.length === 0 ||
     saving ||
-    uploadingPhoto;
+    (REQUIRE_PHOTO && photos.length === 0) ||
+    (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) ||
+    (REQUIRE_SIGNATURE && !signatureImage);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -354,21 +291,32 @@ export default function DailyLogForm({
 
           {masterItem && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {[masterItem.project, masterItem.tower, masterItem.floor, masterItem.activity]
+              {[
+                masterItem.project,
+                masterItem.tower,
+                masterItem.floor,
+                masterItem.activity,
+              ]
                 .filter(Boolean)
-                .join(' — ')}
+                .join(" — ")}
             </p>
           )}
         </DialogHeader>
 
         <div className="space-y-5">
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Fecha</Label>
               <Input
                 type="date"
                 value={form.date}
-                onChange={(e) => updateFormField('date', e.target.value)}
+                onChange={(e) => updateFormField("date", e.target.value)}
               />
             </div>
 
@@ -376,7 +324,7 @@ export default function DailyLogForm({
               <Label className="text-xs">Supervisor</Label>
               <Input
                 value={form.supervisor}
-                onChange={(e) => updateFormField('supervisor', e.target.value)}
+                onChange={(e) => updateFormField("supervisor", e.target.value)}
               />
             </div>
           </div>
@@ -385,7 +333,7 @@ export default function DailyLogForm({
             <Label className="text-xs">Cuadrilla</Label>
             <Input
               value={form.crew_name}
-              onChange={(e) => updateFormField('crew_name', e.target.value)}
+              onChange={(e) => updateFormField("crew_name", e.target.value)}
               placeholder="Ej: Cuadrilla Eléctrica A"
             />
           </div>
@@ -396,31 +344,33 @@ export default function DailyLogForm({
               <Input
                 type="number"
                 value={form.executed_today}
-                onChange={(e) => updateFormField('executed_today', e.target.value)}
+                onChange={(e) =>
+                  updateFormField("executed_today", e.target.value)
+                }
               />
 
               {goalInfo && (
                 <div
                   className={`mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${
                     goalInfo.onTarget
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-amber-50 text-amber-700'
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
                   }`}
                 >
                   {goalInfo.onTarget ? (
                     <>
                       <TrendingUp className="h-3 w-3" />
                       <span>
-                        Dentro de meta. Meta: {goalInfo.dailyGoal}{' '}
-                        {masterItem?.unit || 'und'}/día
+                        Dentro de meta. Meta: {goalInfo.dailyGoal}{" "}
+                        {masterItem?.unit || "und"}/día
                       </span>
                     </>
                   ) : (
                     <>
                       <TrendingDown className="h-3 w-3" />
                       <span>
-                        Bajo meta. Meta: {goalInfo.dailyGoal}{' '}
-                        {masterItem?.unit || 'und'}/día
+                        Bajo meta. Meta: {goalInfo.dailyGoal}{" "}
+                        {masterItem?.unit || "und"}/día
                       </span>
                     </>
                   )}
@@ -429,16 +379,18 @@ export default function DailyLogForm({
             </div>
 
             <div>
-              <Label className="text-xs">Horas trabajadas *</Label>
+              <Label className="text-xs">Horas trabajadas</Label>
               <Input
                 type="number"
                 step="0.5"
                 placeholder="Se calcula del personal si se deja vacío"
                 value={form.hours_worked}
-                onChange={(e) => updateFormField('hours_worked', e.target.value)}
+                onChange={(e) =>
+                  updateFormField("hours_worked", e.target.value)
+                }
               />
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Máximo: 10h/día • 44h/semana. Productividad: ejecutado ÷ horas.
+                Máximo recomendado: 10h/día.
               </p>
             </div>
           </div>
@@ -447,19 +399,20 @@ export default function DailyLogForm({
             <div className="flex flex-wrap gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <span>
                 <Target className="mr-0.5 inline h-3 w-3" />
-                Total:{' '}
+                Total:{" "}
                 <b>
-                  {masterItem.planned_qty} {masterItem.unit || 'und'}
+                  {masterItem.planned_qty} {masterItem.unit || "und"}
                 </b>
               </span>
               <span>
                 Ejecutado acum.: <b>{masterItem.executed_qty || 0}</b>
               </span>
               <span>
-                Pendiente:{' '}
+                Pendiente:{" "}
                 <b>
                   {Math.max(
-                    (masterItem.planned_qty || 0) - (masterItem.executed_qty || 0),
+                    Number(masterItem.planned_qty || 0) -
+                      Number(masterItem.executed_qty || 0),
                     0
                   )}
                 </b>
@@ -486,30 +439,10 @@ export default function DailyLogForm({
               </Button>
             </div>
 
-            {availableRosterWorkers.length > 0 && (
-              <div className="mb-2 rounded-lg bg-muted/40 p-2">
-                <p className="mb-1.5 text-[10px] text-muted-foreground">
-                  Personal del padrón:
-                </p>
-
-                <div className="flex flex-wrap gap-1">
-                  {availableRosterWorkers.map((worker) => (
-                    <button
-                      key={worker.id}
-                      type="button"
-                      className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] text-primary transition-colors hover:bg-primary/20"
-                      onClick={() => addRosterWorker(worker)}
-                    >
-                      + {worker.name} {worker.role ? `(${worker.role})` : ''}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {workers.length === 0 && (
               <p className="py-2 text-xs italic text-muted-foreground">
-                Sin personal registrado. Selecciona del padrón o haz clic en Agregar.
+                Sin personal registrado. Puedes agregar trabajadores si lo
+                necesitas.
               </p>
             )}
 
@@ -523,27 +456,35 @@ export default function DailyLogForm({
                     placeholder="Nombre"
                     className="h-8 text-xs"
                     value={worker.name}
-                    onChange={(e) => updateWorker(index, 'name', e.target.value)}
+                    onChange={(e) =>
+                      updateWorker(index, "name", e.target.value)
+                    }
                   />
                   <Input
                     placeholder="Cargo"
                     className="h-8 text-xs"
                     value={worker.role}
-                    onChange={(e) => updateWorker(index, 'role', e.target.value)}
+                    onChange={(e) =>
+                      updateWorker(index, "role", e.target.value)
+                    }
                   />
                   <Input
                     type="number"
                     placeholder="Horas"
                     className="h-8 text-xs"
                     value={worker.hours}
-                    onChange={(e) => updateWorker(index, 'hours', e.target.value)}
+                    onChange={(e) =>
+                      updateWorker(index, "hours", e.target.value)
+                    }
                   />
                   <Input
                     type="number"
                     placeholder="Ejec."
                     className="h-8 text-xs"
                     value={worker.executed}
-                    onChange={(e) => updateWorker(index, 'executed', e.target.value)}
+                    onChange={(e) =>
+                      updateWorker(index, "executed", e.target.value)
+                    }
                   />
                   <Button
                     type="button"
@@ -568,7 +509,9 @@ export default function DailyLogForm({
           <div className="flex items-center gap-3">
             <Switch
               checked={form.has_restriction}
-              onCheckedChange={(value) => updateFormField('has_restriction', value)}
+              onCheckedChange={(value) =>
+                updateFormField("has_restriction", value)
+              }
             />
             <Label className="text-xs">¿Tiene restricción?</Label>
           </div>
@@ -579,7 +522,7 @@ export default function DailyLogForm({
               <Textarea
                 value={form.restriction_detail}
                 onChange={(e) =>
-                  updateFormField('restriction_detail', e.target.value)
+                  updateFormField("restriction_detail", e.target.value)
                 }
                 className="h-16"
               />
@@ -590,7 +533,9 @@ export default function DailyLogForm({
             <Label className="text-xs">Observaciones</Label>
             <Textarea
               value={form.observations}
-              onChange={(e) => updateFormField('observations', e.target.value)}
+              onChange={(e) =>
+                updateFormField("observations", e.target.value)
+              }
               className="h-16"
             />
           </div>
@@ -599,7 +544,12 @@ export default function DailyLogForm({
             <div className="mb-2 flex items-center justify-between">
               <Label className="flex items-center gap-1.5 text-xs font-semibold">
                 <Camera className="h-3.5 w-3.5" />
-                Fotos del reporte <span className="text-destructive">*</span>
+                Fotos del reporte{" "}
+                {REQUIRE_PHOTO ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground">(opcional)</span>
+                )}
               </Label>
 
               <Button
@@ -608,10 +558,9 @@ export default function DailyLogForm({
                 size="sm"
                 className="h-7 gap-1 text-xs"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhoto}
               >
                 <Plus className="h-3 w-3" />
-                {uploadingPhoto ? 'Subiendo...' : 'Agregar foto'}
+                Agregar foto
               </Button>
 
               <input
@@ -624,7 +573,7 @@ export default function DailyLogForm({
               />
             </div>
 
-            {photos.length === 0 && (
+            {REQUIRE_PHOTO && photos.length === 0 && (
               <p className="text-xs font-medium italic text-destructive/70">
                 Obligatorio cargar al menos una foto.
               </p>
@@ -666,7 +615,10 @@ export default function DailyLogForm({
 
           <div className="space-y-3 border-t pt-4">
             <Label className="block text-xs font-semibold">
-              Validación del Capataz <span className="text-destructive">*</span>
+              Validación del Capataz{" "}
+              {!REQUIRE_CAPATAZ && (
+                <span className="text-muted-foreground">(opcional)</span>
+              )}
             </Label>
 
             <div>
@@ -674,13 +626,18 @@ export default function DailyLogForm({
               <Input
                 placeholder="Nombre completo"
                 value={form.capataz_name}
-                onChange={(e) => updateFormField('capataz_name', e.target.value)}
+                onChange={(e) =>
+                  updateFormField("capataz_name", e.target.value)
+                }
               />
             </div>
 
             <div>
               <Label className="text-xs">
-                Firma del capataz <span className="text-destructive">*</span>
+                Firma del capataz{" "}
+                {!REQUIRE_SIGNATURE && (
+                  <span className="text-muted-foreground">(opcional)</span>
+                )}
               </Label>
 
               {!showSignaturePad ? (
@@ -725,18 +682,19 @@ export default function DailyLogForm({
             </div>
 
             <p className="text-[10px] italic text-muted-foreground">
-              Esto certifica que el capataz ha validado la información del reporte.
+              Más adelante podemos dejar esta validación como obligatoria para
+              producción.
             </p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
 
           <Button onClick={handleSave} disabled={isSaveDisabled}>
-            {saving ? 'Guardando...' : 'Guardar Reporte'}
+            {saving ? "Guardando..." : "Guardar Reporte"}
           </Button>
         </DialogFooter>
       </DialogContent>
