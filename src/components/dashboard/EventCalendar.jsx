@@ -24,14 +24,13 @@ function parseLocalDate(dateStr) {
 
 export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [tooltip, setTooltip] = useState(null); // { rect, event } o { rect, allEvents }
+  const [tooltip, setTooltip] = useState(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startDayOfWeek = getDay(monthStart);
-
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   const masterItemIds = useMemo(
@@ -51,9 +50,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
     const minYear = Math.min(...years) - 12;
     const maxYear = Math.max(...years) + 12;
     const range = [];
-    for (let year = maxYear; year >= minYear; year -= 1) {
-      range.push(year);
-    }
+    for (let year = maxYear; year >= minYear; year -= 1) range.push(year);
     return range;
   }, [dailyLogs, masterItems]);
 
@@ -222,14 +219,10 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
             return (
               <div
                 key={day.toISOString()}
-                className={`min-h-[100px] bg-card p-1.5 ${
-                  isToday ? 'ring-2 ring-accent ring-inset' : ''
-                }`}
+                className={`min-h-[100px] bg-card p-1.5 ${isToday ? 'ring-2 ring-accent ring-inset' : ''}`}
               >
                 <span
-                  className={`text-xs font-medium ${
-                    isToday ? 'font-bold text-accent' : 'text-muted-foreground'
-                  }`}
+                  className={`text-xs font-medium ${isToday ? 'font-bold text-accent' : 'text-muted-foreground'}`}
                 >
                   {format(day, 'd')}
                 </span>
@@ -282,79 +275,48 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
           >
             {tooltip.allEvents ? (
               <div className="space-y-2">
-                <p className="mb-1 font-semibold text-foreground">
-                  Todas las actividades
-                </p>
-
+                <p className="mb-1 font-semibold text-foreground">Todas las actividades</p>
                 {tooltip.allEvents.map((event, index) => (
                   <div key={`${event.type}-${event.label}-${index}`} className="flex items-start gap-1.5">
-                    <span
-                      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${event.color}`}
-                    />
-                    <span className="leading-tight text-muted-foreground">
-                      {event.label}
-                    </span>
+                    <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${event.color}`} />
+                    <span className="leading-tight text-muted-foreground">{event.label}</span>
                   </div>
                 ))}
               </div>
             ) : (
               <>
-                <p className="mb-1.5 font-semibold text-foreground">
-                  {tooltip.event.detail.title}
-                </p>
-
+                <p className="mb-1.5 font-semibold text-foreground">{tooltip.event.detail.title}</p>
                 {tooltip.event.type === 'start' ? (
                   <div className="space-y-1 text-muted-foreground">
-                    {tooltip.event.detail.project && (
-                      <p>📁 {tooltip.event.detail.project}</p>
-                    )}
+                    {tooltip.event.detail.project && <p>📁 {tooltip.event.detail.project}</p>}
                     {tooltip.event.detail.tower && (
                       <p>
                         🏗️ {tooltip.event.detail.tower}
-                        {tooltip.event.detail.floor &&
-                          ` — ${tooltip.event.detail.floor}`}
+                        {tooltip.event.detail.floor && ` — ${tooltip.event.detail.floor}`}
                       </p>
                     )}
-                    {tooltip.event.detail.crew && (
-                      <p>👷 {tooltip.event.detail.crew}</p>
-                    )}
+                    {tooltip.event.detail.crew && <p>👷 {tooltip.event.detail.crew}</p>}
                     {tooltip.event.detail.planned && (
                       <p>
-                        📊 Plan: {tooltip.event.detail.planned}{' '}
-                        {tooltip.event.detail.unit}
+                        📊 Plan: {tooltip.event.detail.planned} {tooltip.event.detail.unit}
                       </p>
                     )}
-                    {tooltip.event.detail.end && (
-                      <p>📅 Término: {tooltip.event.detail.end}</p>
-                    )}
+                    {tooltip.event.detail.end && <p>📅 Término: {tooltip.event.detail.end}</p>}
                   </div>
                 ) : (
                   <div className="space-y-1 text-muted-foreground">
-                    {tooltip.event.detail.project && (
-                      <p>📁 {tooltip.event.detail.project}</p>
-                    )}
+                    {tooltip.event.detail.project && <p>📁 {tooltip.event.detail.project}</p>}
                     {tooltip.event.detail.tower && (
                       <p>
                         🏗️ {tooltip.event.detail.tower}
-                        {tooltip.event.detail.floor &&
-                          ` — ${tooltip.event.detail.floor}`}
+                        {tooltip.event.detail.floor && ` — ${tooltip.event.detail.floor}`}
                       </p>
                     )}
-                    {tooltip.event.detail.supervisor && (
-                      <p>👤 {tooltip.event.detail.supervisor}</p>
-                    )}
-                    {tooltip.event.detail.executed != null && (
-                      <p>✅ Ejecutado: {tooltip.event.detail.executed}</p>
-                    )}
-                    {tooltip.event.detail.hours && (
-                      <p>⏱️ Horas: {tooltip.event.detail.hours}h</p>
-                    )}
-                    {tooltip.event.detail.restriction && (
-                      <p className="font-medium text-red-600">⚠️ Con restricción</p>
-                    )}
-                    {tooltip.event.detail.obs && (
-                      <p className="truncate">💬 {tooltip.event.detail.obs}</p>
-                    )}
+                    {tooltip.event.detail.supervisor && <p>👤 {tooltip.event.detail.supervisor}</p>}
+                    {tooltip.event.detail.executed != null && <p>✅ Ejecutado: {tooltip.event.detail.executed}</p>}
+                    {tooltip.event.detail.hours && <p>⏱️ Horas: {tooltip.event.detail.hours}h</p>}
+                    {tooltip.event.detail.restriction && <p className="font-medium text-red-600">⚠️ Con restricción</p>}
+                    {tooltip.event.detail.obs && <p className="truncate">💬 {tooltip.event.detail.obs}</p>}
                   </div>
                 )}
               </>
@@ -367,7 +329,6 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
             <div className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
             <span className="text-xs text-muted-foreground">Inicio actividad</span>
           </div>
-
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
             <span className="text-xs text-muted-foreground">Reporte diario</span>
