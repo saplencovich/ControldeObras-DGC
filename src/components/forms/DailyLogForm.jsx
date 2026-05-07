@@ -484,7 +484,7 @@ export default function DailyLogForm({
               {workers.map((worker, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-[1fr_1fr_80px_80px_32px] items-center gap-2"
+                  className="grid grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] items-center gap-2"
                 >
                   <Input
                     placeholder="Nombre"
@@ -513,7 +513,7 @@ export default function DailyLogForm({
                   />
                   <Input
                     type="number"
-                    placeholder="Ejec."
+                    placeholder="Ejecutado"
                     className="h-8 text-xs"
                     value={worker.executed}
                     onChange={(e) =>
