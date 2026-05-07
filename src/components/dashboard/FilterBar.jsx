@@ -16,7 +16,7 @@ import {
   RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
-import { exportReportCSV } from '@/utils/exportReport';
+import { exportReportExcel } from '@/utils/exportExcel';
 import { exportReportPDF } from '@/utils/exportPDF';
 import { usePermissions } from '@/lib/PermissionsContext';
 
@@ -201,10 +201,10 @@ export default function FilterBar({
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 text-xs"
-          onClick={() => exportReportCSV(masterItems, dailyLogs)}
+          onClick={() => exportReportExcel(masterItems, dailyLogs)}
         >
           <FileSpreadsheet className="h-3 w-3" />
-          Exportar CSV
+          Exportar Excel
         </Button>
 
         <Button
