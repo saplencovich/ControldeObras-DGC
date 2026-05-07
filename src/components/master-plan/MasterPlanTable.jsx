@@ -127,7 +127,76 @@ export default function MasterPlanTable({
       </CardHeader>
 
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="space-y-3 md:hidden">
+          {items.length === 0 && (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No hay ítems en el plan maestro. Crea uno nuevo para comenzar.
+            </div>
+          )}
+          {items.map((item) => {
+            const pct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
+            const itemLogs = getLogsForItem(item.id);
+            return (
+              <div key={item.id} className="rounded-lg border p-3 shadow-sm">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">{item.activity}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {item.project} — {item.tower || '—'} — {item.floor || '—'}
+                    </p>
+                  </div>
+                  <Badge className={`text-[10px] ${statusBadge[item.status] || statusBadge.pendiente}`}>
+                    {statusLabel[item.status] || item.status}
+                  </Badge>
+                </div>
+                <div className="mb-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div><span className="text-muted-foreground">Inicio:</span> {item.start_date || '—'}</div>
+                  <div><span className="text-muted-foreground">Término:</span> {item.end_date || '—'}</div>
+                  <div><span className="text-muted-foreground">Plan:</span> {item.planned_qty} {item.unit}</div>
+                  <div><span className="text-muted-foreground">Ejecutado:</span> {item.executed_qty || 0}</div>
+                </div>
+                <div className="mb-2 space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted-foreground">% Avance</span>
+                    <span className="font-medium">{pct}%</span>
+                  </div>
+                  <Progress value={pct} className="h-1.5" />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{item.crew_name || 'Sin cuadrilla'}</span>
+                  <span>{itemLogs.length} reportes</span>
+                </div>
+                <div className="mt-2 flex items-center justify-end gap-1">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => onDailyLog(item)}>
+                    <FileText className="mr-1 h-3 w-3" /> Reporte
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <MoreHorizontal className="w-3.5 h-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link to={`/item/${item.id}`} className="flex items-center gap-2">
+                          <Eye className="w-3.5 h-3.5" /> Ver Detalle
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onEdit(item)} className="gap-2">
+                        <Pencil className="w-3.5 h-3.5" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onDelete(item)} className="gap-2 text-destructive">
+                        <Trash2 className="w-3.5 h-3.5" /> Borrar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">

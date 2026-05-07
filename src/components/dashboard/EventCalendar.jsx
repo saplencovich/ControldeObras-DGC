@@ -115,13 +115,13 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="flex items-center gap-2 text-base font-semibold">
             <Calendar className="h-4 w-4 text-accent" />
             Calendario de Eventos
           </CardTitle>
 
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
@@ -135,7 +135,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="h-8 min-w-[150px] px-2 text-sm font-medium capitalize"
+                  className="h-8 min-w-[132px] px-2 text-xs sm:text-sm font-medium capitalize"
                 >
                   {format(currentMonth, 'MMMM yyyy', { locale: es })}
                 </Button>
@@ -198,7 +198,8 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
       </CardHeader>
 
       <CardContent>
-        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-border">
+        <div className="-mx-1 overflow-x-auto px-1">
+        <div className="grid min-w-[620px] grid-cols-7 gap-px overflow-hidden rounded-lg bg-border">
           {dayNames.map((dayName) => (
             <div
               key={dayName}
@@ -209,7 +210,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
           ))}
 
           {Array.from({ length: startDayOfWeek }).map((_, index) => (
-            <div key={`empty-${index}`} className="min-h-[100px] bg-card p-2" />
+            <div key={`empty-${index}`} className="min-h-[82px] sm:min-h-[100px] bg-card p-1.5 sm:p-2" />
           ))}
 
           {days.map((day) => {
@@ -219,7 +220,9 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
             return (
               <div
                 key={day.toISOString()}
-                className={`min-h-[100px] bg-card p-1.5 ${isToday ? 'ring-2 ring-accent ring-inset' : ''}`}
+                className={`min-h-[82px] sm:min-h-[100px] bg-card p-1 sm:p-1.5 ${
+                  isToday ? 'ring-2 ring-accent ring-inset' : ''
+                }`}
               >
                 <span
                   className={`text-xs font-medium ${isToday ? 'font-bold text-accent' : 'text-muted-foreground'}`}
@@ -231,7 +234,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
                   {events.slice(0, 4).map((event, index) => (
                     <div
                       key={`${event.type}-${event.label}-${index}`}
-                      className={`${event.color} cursor-pointer truncate rounded px-1 py-0.5 text-[9px] leading-tight text-white`}
+                      className={`${event.color} cursor-pointer truncate rounded px-1 py-0.5 text-[8px] sm:text-[9px] leading-tight text-white`}
                       onMouseEnter={(e) =>
                         setTooltip({
                           rect: e.currentTarget.getBoundingClientRect(),
@@ -263,6 +266,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
               </div>
             );
           })}
+        </div>
         </div>
 
         {tooltip && (
@@ -324,7 +328,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-4">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
             <span className="text-xs text-muted-foreground">Inicio actividad</span>

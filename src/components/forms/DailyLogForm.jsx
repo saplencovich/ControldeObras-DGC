@@ -484,7 +484,7 @@ export default function DailyLogForm({
               {workers.map((worker, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] items-center gap-2"
+                  className="grid grid-cols-1 gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] sm:items-center sm:border-0 sm:p-0"
                 >
                   <Input
                     placeholder="Nombre"
@@ -524,7 +524,7 @@ export default function DailyLogForm({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-red-500"
+                    className="h-8 w-8 justify-self-end text-red-500"
                     onClick={() => removeWorker(index)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -533,7 +533,7 @@ export default function DailyLogForm({
               ))}
 
               {workers.length > 0 && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground hidden sm:block">
                   Columnas: Nombre / Cargo / Horas / Ejecutado
                 </p>
               )}

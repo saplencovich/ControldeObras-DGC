@@ -69,12 +69,12 @@ export default function FilterBar({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
         <Select
           value={filters.project || ''}
           onValueChange={(value) => updateFilter('project', value)}
         >
-          <SelectTrigger className="h-9 w-[150px] text-xs text-foreground [&>span]:text-foreground">
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
             <SelectValue placeholder="Obras" />
           </SelectTrigger>
           <SelectContent>
@@ -91,7 +91,7 @@ export default function FilterBar({
           value={filters.tower || ''}
           onValueChange={(value) => updateFilter('tower', value)}
         >
-          <SelectTrigger className="h-9 w-[130px] text-xs text-foreground [&>span]:text-foreground">
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
             <SelectValue placeholder="Torres" />
           </SelectTrigger>
           <SelectContent>
@@ -108,7 +108,7 @@ export default function FilterBar({
           value={filters.floor || ''}
           onValueChange={(value) => updateFilter('floor', value)}
         >
-          <SelectTrigger className="h-9 w-[120px] text-xs text-foreground [&>span]:text-foreground">
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
             <SelectValue placeholder="Pisos" />
           </SelectTrigger>
           <SelectContent>
@@ -125,7 +125,7 @@ export default function FilterBar({
           value={filters.activity || ''}
           onValueChange={(value) => updateFilter('activity', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs text-foreground [&>span]:text-foreground">
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
             <SelectValue placeholder="Actividades" />
           </SelectTrigger>
           <SelectContent>
@@ -142,7 +142,7 @@ export default function FilterBar({
           value={filters.release || ''}
           onValueChange={(value) => updateFilter('release', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs text-foreground [&>span]:text-foreground">
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
             <SelectValue placeholder="Liberación" />
           </SelectTrigger>
           <SelectContent>
@@ -155,7 +155,7 @@ export default function FilterBar({
           </SelectContent>
         </Select>
 
-        <div className="relative min-w-[200px] flex-1">
+        <div className="relative w-full sm:col-span-2 lg:col-span-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar sector, responsable, restricción..."
@@ -166,7 +166,8 @@ export default function FilterBar({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="-mx-1 overflow-x-auto px-1">
+        <div className="flex min-w-max gap-2 pb-1">
         <Button
           size="sm"
           className="h-8 gap-1.5 bg-primary text-xs"
@@ -225,6 +226,7 @@ export default function FilterBar({
           <RefreshCw className="h-3 w-3" />
           Recargar
         </Button>
+        </div>
       </div>
     </div>
   );
