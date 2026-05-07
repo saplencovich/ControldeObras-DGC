@@ -16,7 +16,7 @@ import {
   RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
-import { exportReportCSV } from '@/utils/exportReport';
+import { exportReportExcel } from '@/utils/exportExcel';
 import { exportReportPDF } from '@/utils/exportPDF';
 import { usePermissions } from '@/lib/PermissionsContext';
 
@@ -43,6 +43,16 @@ export default function FilterBar({
 }) {
   const { canCreateProjects } = usePermissions();
 
+  const towerOptions = [
+    ...new Set([...TOWERS, ...masterItems.map((item) => item.tower).filter(Boolean)]),
+  ];
+  const floorOptions = [
+    ...new Set([...FLOORS, ...masterItems.map((item) => item.floor).filter(Boolean)]),
+  ];
+  const activityOptions = [
+    ...new Set([...ACTIVITIES, ...masterItems.map((item) => item.activity).filter(Boolean)]),
+  ];
+
   const updateFilter = (key, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -59,16 +69,16 @@ export default function FilterBar({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
         <Select
-          value={filters.project || 'all'}
+          value={filters.project || ''}
           onValueChange={(value) => updateFilter('project', value)}
         >
-          <SelectTrigger className="h-9 w-[150px] text-xs">
-            <SelectValue placeholder="Obra" />
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Obras" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas las obras</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {projects.map((project) => (
               <SelectItem key={project.id} value={project.name}>
                 {project.name}
@@ -78,15 +88,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.tower || 'all'}
+          value={filters.tower || ''}
           onValueChange={(value) => updateFilter('tower', value)}
         >
-          <SelectTrigger className="h-9 w-[130px] text-xs">
-            <SelectValue placeholder="Torre" />
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Torres" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            {TOWERS.map((tower) => (
+            {towerOptions.map((tower) => (
               <SelectItem key={tower} value={tower}>
                 {tower}
               </SelectItem>
@@ -95,15 +105,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.floor || 'all'}
+          value={filters.floor || ''}
           onValueChange={(value) => updateFilter('floor', value)}
         >
-          <SelectTrigger className="h-9 w-[120px] text-xs">
-            <SelectValue placeholder="Piso" />
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Pisos" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
-            {FLOORS.map((floor) => (
+            {floorOptions.map((floor) => (
               <SelectItem key={floor} value={floor}>
                 {floor}
               </SelectItem>
@@ -112,15 +122,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.activity || 'all'}
+          value={filters.activity || ''}
           onValueChange={(value) => updateFilter('activity', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue placeholder="Actividad" />
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Actividades" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            {ACTIVITIES.map((activity) => (
+            {activityOptions.map((activity) => (
               <SelectItem key={activity} value={activity}>
                 {activity}
               </SelectItem>
@@ -129,14 +139,14 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.release || 'all'}
+          value={filters.release || ''}
           onValueChange={(value) => updateFilter('release', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue placeholder="Estado liberación" />
+          <SelectTrigger className="h-9 w-full text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Liberación" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {RELEASE_STATUSES.map((status) => (
               <SelectItem key={status.value} value={status.value}>
                 {status.label}
@@ -145,7 +155,7 @@ export default function FilterBar({
           </SelectContent>
         </Select>
 
-        <div className="relative min-w-[200px] flex-1">
+        <div className="relative w-full sm:col-span-2 lg:col-span-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar sector, responsable, restricción..."
@@ -156,7 +166,8 @@ export default function FilterBar({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="-mx-1 overflow-x-auto px-1">
+        <div className="flex min-w-max gap-2 pb-1">
         <Button
           size="sm"
           className="h-8 gap-1.5 bg-primary text-xs"
@@ -190,10 +201,10 @@ export default function FilterBar({
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 text-xs"
-          onClick={() => exportReportCSV(masterItems, dailyLogs)}
+          onClick={() => exportReportExcel(masterItems, dailyLogs)}
         >
           <FileSpreadsheet className="h-3 w-3" />
-          Exportar CSV
+          Exportar Excel
         </Button>
 
         <Button
@@ -215,6 +226,7 @@ export default function FilterBar({
           <RefreshCw className="h-3 w-3" />
           Recargar
         </Button>
+        </div>
       </div>
     </div>
   );

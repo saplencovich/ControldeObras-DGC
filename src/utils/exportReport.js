@@ -68,7 +68,7 @@ export function exportReportCSV(masterItems, dailyLogs) {
   });
 
   const csvContent = rows.map(r =>
-    r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')
   ).join('\n');
 
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });

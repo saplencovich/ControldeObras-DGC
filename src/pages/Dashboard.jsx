@@ -422,7 +422,7 @@ export default function Dashboard() {
         onDeleteLog={handleDeleteLog}
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
         <EventCalendar masterItems={filteredMasterItems} dailyLogs={dailyLogs} />
 
         <CrewProductivity
