@@ -197,7 +197,7 @@ export default function MasterItemForm({
       restrictions: form.restrictions.trim(),
       observations: form.observations.trim(),
       crew_size: validMembers.length,
-      crew_members: validMembers,
+      crew_members: JSON.stringify(validMembers),
     };
   };
 

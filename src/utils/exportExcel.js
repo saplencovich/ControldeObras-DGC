@@ -245,12 +245,19 @@ export async function exportReportExcel(masterItems, dailyLogs) {
   styleHeader(logSheet.getRow(3));
 
   dailyLogs.forEach((log) => {
+    const masterItem = masterItems.find(mi => String(mi.id) === String(log.master_item_id));
+    
+    const project = log.project || masterItem?.project || '';
+    const tower = log.tower || masterItem?.tower || '';
+    const floor = log.floor || masterItem?.floor || '';
+    const activity = log.activity || masterItem?.activity || '';
+
     const row = logSheet.addRow({
       date: log.date || '',
-      project: log.project || '',
-      tower: log.tower || '',
-      floor: log.floor || '',
-      activity: log.activity || '',
+      project: project,
+      tower: tower,
+      floor: floor,
+      activity: activity,
       supervisor: log.supervisor || '',
       executed: Number(log.executed_today) || 0,
       hours: Number(log.hours_worked) || 0,
@@ -259,6 +266,7 @@ export async function exportReportExcel(masterItems, dailyLogs) {
       observations: log.observations || '',
     });
 
+    row.font = { bold: true };
     row.getCell('executed').numFmt = '#,##0';
     row.getCell('hours').numFmt = '#,##0';
     row.getCell('date').numFmt = 'dd/mm/yyyy';
@@ -273,15 +281,20 @@ export async function exportReportExcel(masterItems, dailyLogs) {
       restrictionCell.font = /** @type {Partial<import('exceljs').Font>} */ ({ color: { argb: 'FFB91C1C' }, bold: true });
     }
 
-    if (log.crew_workers?.length) {
-      /** @type {any[]} */
-      const crewWorkers = log.crew_workers;
+    let crewWorkers = [];
+    if (Array.isArray(log.crew_workers)) {
+      crewWorkers = log.crew_workers;
+    } else if (typeof log.crew_workers === 'string') {
+      try { crewWorkers = JSON.parse(log.crew_workers); } catch (e) {}
+    }
+
+    if (crewWorkers?.length) {
       crewWorkers.forEach((worker) => {
         const crewRow = logSheet.addRow({
-          date: '',
-          project: '',
-          tower: '',
-          floor: '',
+          date: log.date || '',
+          project: project,
+          tower: tower,
+          floor: floor,
           activity: `  └ ${worker.name || ''}`,
           supervisor: worker.role || '',
           executed: Number(worker.executed) || 0,

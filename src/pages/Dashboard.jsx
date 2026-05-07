@@ -154,7 +154,7 @@ export default function Dashboard() {
         throw new Error("No se encontró el ítem asociado al reporte diario");
       }
 
-      return api.post(`/master-items/${masterItemId}/daily-logs`, {
+      return api.post('/daily-logs', {
         ...data,
         master_item_id: masterItemId,
       });

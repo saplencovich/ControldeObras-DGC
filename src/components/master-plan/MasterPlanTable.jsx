@@ -54,9 +54,12 @@ function getProgressPct(item) {
 }
 
 function getProductivityColor(pct) {
-  if (pct >= 80) return "bg-emerald-500";
+  if (pct >= 100) return "bg-emerald-500";
+  if (pct >= 75) return "bg-emerald-300";
   if (pct >= 50) return "bg-amber-400";
-  return "bg-red-500";
+  if (pct >= 25) return "bg-orange-300";
+  if (pct > 0) return "bg-red-300";
+  return "bg-slate-200";
 }
 
 function formatNumber(value) {

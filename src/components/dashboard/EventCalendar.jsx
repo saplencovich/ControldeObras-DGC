@@ -84,6 +84,23 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
           },
         });
       }
+      if (item.end_date && isSameDay(parseLocalDate(item.end_date), day)) {
+        events.push({
+          type: 'end',
+          label: item.activity,
+          color: 'bg-red-500',
+          detail: {
+            title: item.activity,
+            project: item.project,
+            tower: item.tower,
+            floor: item.floor,
+            crew: item.crew_name,
+            start: item.start_date,
+            planned: item.planned_qty,
+            unit: item.unit,
+          },
+        });
+      }
     });
 
     dailyLogs
@@ -243,7 +260,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
                       }
                       onMouseLeave={() => setTooltip(null)}
                     >
-                      {event.type === 'start' ? '▶' : '📋'} {event.label}
+                      {event.type === 'start' ? '▶' : event.type === 'end' ? '⏹' : '📋'} {event.label}
                     </div>
                   ))}
 
@@ -290,7 +307,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
             ) : (
               <>
                 <p className="mb-1.5 font-semibold text-foreground">{tooltip.event.detail.title}</p>
-                {tooltip.event.type === 'start' ? (
+                {tooltip.event.type === 'start' || tooltip.event.type === 'end' ? (
                   <div className="space-y-1 text-muted-foreground">
                     {tooltip.event.detail.project && <p>📁 {tooltip.event.detail.project}</p>}
                     {tooltip.event.detail.tower && (
@@ -305,7 +322,8 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
                         📊 Plan: {tooltip.event.detail.planned} {tooltip.event.detail.unit}
                       </p>
                     )}
-                    {tooltip.event.detail.end && <p>📅 Término: {tooltip.event.detail.end}</p>}
+                    {tooltip.event.type === 'start' && tooltip.event.detail.end && <p>📅 Término: {tooltip.event.detail.end}</p>}
+                    {tooltip.event.type === 'end' && tooltip.event.detail.start && <p>📅 Inicio: {tooltip.event.detail.start}</p>}
                   </div>
                 ) : (
                   <div className="space-y-1 text-muted-foreground">
@@ -332,6 +350,10 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-sm bg-blue-500" />
             <span className="text-xs text-muted-foreground">Inicio actividad</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-sm bg-red-500" />
+            <span className="text-xs text-muted-foreground">Término actividad</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
