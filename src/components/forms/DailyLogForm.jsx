@@ -153,8 +153,42 @@ export default function DailyLogForm({
       is_local_preview: true,
     }));
 
-    setPhotos((prev) => [...prev, ...localPhotos]);
-    event.target.value = "";
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const fileUrl = data?.file_url || data?.url || data?.data?.file_url || data?.data?.url;
+
+        if (!fileUrl) {
+          throw new Error('El servidor no devolvio una URL valida para la foto.');
+        }
+
+        setPhotos((prev) => [
+          ...prev,
+          {
+            url: fileUrl,
+            description: '',
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error al subir foto:', error);
+      alert('Error al subir foto.');
+    } finally {
+      setUploadingPhoto(false);
+      event.target.value = '';
+    }
   };
 
   const removePhoto = (index) => {

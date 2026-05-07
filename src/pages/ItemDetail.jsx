@@ -146,12 +146,27 @@ export default function ItemDetail() {
     );
   }
 
-  const completedChecklist = checklistEntries.filter((entry) => entry.completed).length;
-  const totalExecutedInLogs = logs.reduce(
+  // Filtro defensivo: algunos endpoints pueden devolver todos los registros.
+  // Asegura que esta vista solo muestre datos del ítem abierto.
+  const scopedLogs = logs.filter(
+    (log) => String(log.master_item_id) === String(itemId)
+  );
+  const scopedChecklistEntries = checklistEntries.filter(
+    (entry) => String(entry.master_item_id) === String(itemId)
+  );
+  const scopedWorkers = workers.filter(
+    (worker) => String(worker.master_item_id) === String(itemId)
+  );
+  const scopedPhotos = photos.filter(
+    (photo) => String(photo.master_item_id) === String(itemId)
+  );
+
+  const completedChecklist = scopedChecklistEntries.filter((entry) => entry.completed).length;
+  const totalExecutedInLogs = scopedLogs.reduce(
     (sum, log) => sum + (Number(log.executed_today) || 0),
     0
   );
-  const productivityRows = logs.reduce(
+  const productivityRows = scopedLogs.reduce(
     (sum, log) => sum + (Array.isArray(log.crew_workers) ? log.crew_workers.length : 0),
     0
   );
@@ -159,19 +174,19 @@ export default function ItemDetail() {
   const overviewCards = [
     {
       title: 'Reportes diarios',
-      value: logs.length,
+      value: scopedLogs.length,
       hint: `Ejecutado en bitácora: ${totalExecutedInLogs}`,
       icon: FileText,
     },
     {
       title: 'Checklist',
-      value: `${completedChecklist}/${Math.max(checklistEntries.length, 0)}`,
+      value: `${completedChecklist}/${Math.max(scopedChecklistEntries.length, 0)}`,
       hint: 'Ítems marcados',
       icon: CheckSquare,
     },
     {
       title: 'Registro fotográfico',
-      value: photos.length,
+      value: scopedPhotos.length,
       hint: 'Fotos asociadas',
       icon: Camera,
     },
@@ -217,18 +232,18 @@ export default function ItemDetail() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <DailyLogTable logs={logs} onAddLog={() => setShowLogForm(true)} />
+        <DailyLogTable logs={scopedLogs} onAddLog={() => setShowLogForm(true)} />
 
         <ChecklistSection
-          entries={checklistEntries}
+          entries={scopedChecklistEntries}
           onToggle={handleToggleChecklist}
         />
       </div>
 
-      <WorkerProductivity logs={logs} workers={workers} />
+      <WorkerProductivity logs={scopedLogs} workers={scopedWorkers} />
 
       <PhotoGallery
-        photos={photos}
+        photos={scopedPhotos}
         masterItemId={itemId}
         onPhotoAdded={() =>
           queryClient.invalidateQueries({ queryKey: ['photos', itemId] })

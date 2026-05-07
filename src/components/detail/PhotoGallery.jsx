@@ -50,7 +50,11 @@ export default function PhotoGallery({
       }
 
       const uploadData = await uploadResponse.json();
-      const fileUrl = uploadData.file_url || uploadData.url;
+      const fileUrl =
+        uploadData?.file_url ||
+        uploadData?.url ||
+        uploadData?.data?.file_url ||
+        uploadData?.data?.url;
 
       if (!fileUrl) {
         throw new Error('El servidor no devolvió la URL de archivo.')
@@ -58,7 +62,7 @@ export default function PhotoGallery({
 
       await api.post('/site-photos', {
         master_item_id: masterItemId,
-        file_url: uploadData.file_url,
+        file_url: fileUrl,
         date: new Date().toISOString().split('T')[0],
         label: 'item_maestro',
       });
