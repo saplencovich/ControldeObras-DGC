@@ -27,6 +27,8 @@ import { Switch } from "@/components/ui/switch";
 
 import SignaturePad from "./SignaturePad";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 const REQUIRE_PHOTO = false;
 const REQUIRE_SIGNATURE = false;
 const REQUIRE_CAPATAZ = false;
@@ -142,7 +144,7 @@ export default function DailyLogForm({
     );
   };
 
-  const handlePhotoUpload = (event) => {
+  const handlePhotoUpload = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
@@ -153,6 +155,7 @@ export default function DailyLogForm({
       is_local_preview: true,
     }));
 
+    try {
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
@@ -186,7 +189,6 @@ export default function DailyLogForm({
       console.error('Error al subir foto:', error);
       alert('Error al subir foto.');
     } finally {
-      setUploadingPhoto(false);
       event.target.value = '';
     }
   };

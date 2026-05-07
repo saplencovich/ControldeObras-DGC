@@ -135,7 +135,7 @@ export default function MasterPlanTable({
           )}
           {items.map((item) => {
             const pct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
-            const itemLogs = getLogsForItem(item.id);
+            const itemLogs = logsByItemId[Number(item.id)] || [];
             return (
               <div key={item.id} className="rounded-lg border p-3 shadow-sm">
                 <div className="mb-2 flex items-start justify-between gap-2">
