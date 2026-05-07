@@ -3,120 +3,245 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/630dfa8aa_logoclientes-8.png';
+
+/** @type {import('exceljs').FillPattern} */
+const headerFill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FF0F172A' },
+};
+
+const headerFont = {
+  color: { argb: 'FFFFFFFF' },
+  bold: true,
+  size: 12,
+};
+
+/** @type {Partial<import('exceljs').Borders>} */
+const thinBorder = {
+  top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+};
+
+/** @type {import('exceljs').FillPattern} */
+const subtitleFill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FFFDE8D8' },
+};
+
+/** @param {import('exceljs').Row} row */
+function styleHeader(row) {
+  row.eachCell((cell) => {
+    cell.fill = headerFill;
+    cell.font = headerFont;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = thinBorder;
+  });
+  row.height = 28;
+}
+
+/** @param {import('exceljs').Worksheet} sheet @param {number} [startRow] */
+function styleSheetRows(sheet, startRow = 4) {
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber < startRow) return;
+    const isEven = rowNumber % 2 === 0;
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = thinBorder;
+      const colNumber = Number(cell.col);
+      cell.alignment = { vertical: 'middle', horizontal: colNumber === 4 || colNumber === 5 ? 'left' : 'center', wrapText: true };
+      if (isEven) {
+        cell.fill = /** @type {import('exceljs').FillPattern} */ ({
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' },
+        });
+      }
+    });
+  });
+}
+
+/**
+ * @param {string|number|undefined} statusValue
+ * @returns {{ fill: any; font: any }}
+ */
+function getStatusStyle(statusValue) {
+  const statusVal = String(statusValue || '').toLowerCase();
+  if (statusVal.includes('complet')) {
+    return {
+      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }),
+      font: { color: { argb: 'FF047857' }, bold: true },
+    };
+  }
+  if (statusVal.includes('ejec')) {
+    return {
+      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }),
+      font: { color: { argb: 'FF1D4ED8' }, bold: true },
+    };
+  }
+  if (statusVal.includes('bloque')) {
+    return {
+      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }),
+      font: { color: { argb: 'FFB91C1C' }, bold: true },
+    };
+  }
+  return {
+    fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }),
+    font: { color: { argb: 'FF334155' }, bold: true },
+  };
+}
+
+/** @param {import('exceljs').Worksheet} sheet @param {string} subtitle @param {string} lastColumn */
+function styleTitleRows(sheet, subtitle, lastColumn) {
+  const titleRow = sheet.getRow(1);
+  titleRow.font = { size: 16, bold: true, color: { argb: 'FF111827' } };
+  titleRow.alignment = { vertical: 'middle', horizontal: 'left' };
+  sheet.mergeCells(`A1:${lastColumn}1`);
+  titleRow.height = 24;
+
+  const subtitleRow = sheet.getRow(2);
+  subtitleRow.values = [subtitle];
+  subtitleRow.font = { size: 11, color: { argb: 'FF1F2937' } };
+  subtitleRow.fill = subtitleFill;
+  subtitleRow.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  subtitleRow.eachCell((cell) => {
+    cell.border = thinBorder;
+  });
+  sheet.mergeCells(`A2:${lastColumn}2`);
+  subtitleRow.height = 20;
+}
+
+/** @param {import('exceljs').Workbook} workbook */
+async function loadLogoImageId(workbook) {
+  try {
+    const response = await fetch(LOGO_URL);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const base64 = String(dataUrl).split(',')[1];
+    return workbook.addImage({ base64, extension: 'png' });
+  } catch {
+    return null;
+  }
+}
+
+/** @param {import('exceljs').Worksheet} sheet @param {number|null} imageId */
+function insertLogo(sheet, imageId) {
+  if (!imageId) return;
+  sheet.addImage(imageId, {
+    tl: { col: 9.5, row: 0.15 },
+    ext: { width: 110, height: 30 },
+  });
+}
+
+/**
+ * @param {any[]} masterItems
+ * @param {any[]} dailyLogs
+ */
 export async function exportReportExcel(masterItems, dailyLogs) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Control de Obras DGC';
   workbook.created = new Date();
 
-  // 1. Plan Maestro Sheet
-  const masterSheet = workbook.addWorksheet('Plan Maestro');
-  
-  masterSheet.columns = [
-    { header: 'Proyecto', key: 'project', width: 25 },
-    { header: 'Torre', key: 'tower', width: 15 },
-    { header: 'Piso', key: 'floor', width: 15 },
-    { header: 'Actividad', key: 'activity', width: 30 },
-    { header: 'Cuadrilla', key: 'crew', width: 25 },
-    { header: 'Planificado', key: 'planned', width: 15 },
-    { header: 'Ejecutado', key: 'executed', width: 15 },
-    { header: '% Avance', key: 'progress', width: 15 },
-    { header: 'Estado', key: 'status', width: 20 },
-    { header: 'Liberación', key: 'release', width: 20 },
-    { header: 'Restricciones', key: 'restrictions', width: 40 },
-    { header: 'Observaciones', key: 'observations', width: 40 },
-  ];
+  const logoImageId = await loadLogoImageId(workbook);
 
-  // Estilo de Cabeceras
-  masterSheet.getRow(1).eachCell((cell) => {
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF0F172A' } // Slate-900 (Color Oscuro Web)
-    };
-    cell.font = {
-      color: { argb: 'FFFFFFFF' },
-      bold: true,
-    };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  const masterSheet = workbook.addWorksheet('Plan Maestro', {
+    properties: { defaultRowHeight: 24 },
+    views: [{ state: 'frozen', ySplit: 3 }],
   });
 
-  // Datos
-  masterItems.forEach(item => {
+  masterSheet.columns = [
+    { header: 'Proyecto', key: 'project', width: 28 },
+    { header: 'Torre', key: 'tower', width: 14 },
+    { header: 'Piso', key: 'floor', width: 14 },
+    { header: 'Actividad', key: 'activity', width: 32 },
+    { header: 'Cuadrilla', key: 'crew', width: 24 },
+    { header: 'Planificado', key: 'planned', width: 14 },
+    { header: 'Ejecutado', key: 'executed', width: 14 },
+    { header: '% Avance', key: 'progress', width: 12 },
+    { header: 'Estado', key: 'status', width: 18 },
+    { header: 'Liberación', key: 'release', width: 18 },
+    { header: 'Restricciones', key: 'restrictions', width: 36 },
+    { header: 'Observaciones', key: 'observations', width: 38 },
+  ];
+
+  masterSheet.insertRow(1, ['Informe de Control de Obras DGC']);
+  masterSheet.insertRow(2, ['']);
+  styleTitleRows(masterSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'L');
+  insertLogo(masterSheet, logoImageId);
+  styleHeader(masterSheet.getRow(3));
+
+  masterItems.forEach((item) => {
     const planned = Number(item.planned_qty) || 0;
     const executed = Number(item.executed_qty) || 0;
-    const pct = planned > 0 ? (executed / planned * 100).toFixed(1) : 0;
-    
+    const pct = planned > 0 ? Number(((executed / planned) * 100).toFixed(1)) : 0;
+
     const row = masterSheet.addRow({
       project: item.project || '',
       tower: item.tower || '',
       floor: item.floor || '',
       activity: item.activity || '',
       crew: item.crew_name || '',
-      planned: planned,
-      executed: executed,
-      progress: Number(pct),
-      status: item.status || 'pendiente',
+      planned,
+      executed,
+      progress: pct,
+      status: item.status || 'Pendiente',
       release: item.release_status || '',
       restrictions: item.restrictions || '',
-      observations: item.observations || ''
+      observations: item.observations || '',
     });
 
-    // Añadir estilo al % de Avance
-    const progressCell = row.getCell('progress');
-    progressCell.numFmt = '0.0"%"';
+    row.getCell('planned').numFmt = '#,##0';
+    row.getCell('executed').numFmt = '#,##0';
+    row.getCell('progress').numFmt = '0.0\\%';
+    row.getCell('progress').alignment = { horizontal: 'right', vertical: 'middle' };
 
-    // Añadir colores a Estado
     const statusCell = row.getCell('status');
-    const statusVal = statusCell.value?.toLowerCase();
-    
-    if (statusVal === 'completado') {
-      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Emerald-50
-      statusCell.font = { color: { argb: 'FF047857' }, bold: true }; // Emerald-700
-    } else if (statusVal === 'en_ejecucion') {
-      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; // Blue-50
-      statusCell.font = { color: { argb: 'FF1D4ED8' }, bold: true }; // Blue-700
-    } else if (statusVal === 'bloqueado') {
-      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; // Red-50
-      statusCell.font = { color: { argb: 'FFB91C1C' }, bold: true }; // Red-700
-    } else {
-      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; // Slate-100
-      statusCell.font = { color: { argb: 'FF475569' }, bold: true }; // Slate-600
-    }
+    const statusStyle = getStatusStyle(statusCell.value == null ? undefined : String(statusCell.value));
+    statusCell.fill = /** @type {import('exceljs').Fill} */ (statusStyle.fill);
+    statusCell.font = statusStyle.font;
+    statusCell.alignment = { horizontal: 'center', vertical: 'middle' };
   });
 
-  // 2. Reportes Diarios Sheet
-  const logSheet = workbook.addWorksheet('Reportes Diarios');
-  
+  masterSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
+  styleSheetRows(masterSheet, 4);
+  masterSheet.properties.tabColor = { argb: 'F97316' };
+
+  const logSheet = workbook.addWorksheet('Reportes Diarios', {
+    properties: { defaultRowHeight: 24 },
+    views: [{ state: 'frozen', ySplit: 3 }],
+  });
+
   logSheet.columns = [
-    { header: 'Fecha', key: 'date', width: 15 },
-    { header: 'Proyecto', key: 'project', width: 25 },
-    { header: 'Torre', key: 'tower', width: 15 },
-    { header: 'Piso', key: 'floor', width: 15 },
-    { header: 'Actividad', key: 'activity', width: 30 },
-    { header: 'Supervisor', key: 'supervisor', width: 25 },
-    { header: 'Ejecutado Hoy', key: 'executed', width: 15 },
-    { header: 'Horas', key: 'hours', width: 15 },
-    { header: 'Restricción', key: 'hasRestriction', width: 15 },
-    { header: 'Detalle Restricción', key: 'restrictionDetail', width: 40 },
-    { header: 'Observaciones', key: 'observations', width: 40 },
+    { header: 'Fecha', key: 'date', width: 16 },
+    { header: 'Proyecto', key: 'project', width: 26 },
+    { header: 'Torre', key: 'tower', width: 14 },
+    { header: 'Piso', key: 'floor', width: 14 },
+    { header: 'Actividad', key: 'activity', width: 32 },
+    { header: 'Supervisor', key: 'supervisor', width: 24 },
+    { header: 'Ejecutado Hoy', key: 'executed', width: 16 },
+    { header: 'Horas', key: 'hours', width: 14 },
+    { header: 'Restricción', key: 'hasRestriction', width: 16 },
+    { header: 'Detalle Restricción', key: 'restrictionDetail', width: 38 },
+    { header: 'Observaciones', key: 'observations', width: 38 },
   ];
 
-  // Estilo de Cabeceras Reportes
-  logSheet.getRow(1).eachCell((cell) => {
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF334155' } // Slate-700
-    };
-    cell.font = {
-      color: { argb: 'FFFFFFFF' },
-      bold: true,
-    };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-  });
+  logSheet.insertRow(1, ['Informe de Reportes Diarios']);
+  logSheet.insertRow(2, ['']);
+  styleTitleRows(logSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'K');
+  insertLogo(logSheet, logoImageId);
+  styleHeader(logSheet.getRow(3));
 
-  dailyLogs.forEach(log => {
-    const mainRow = logSheet.addRow({
+  dailyLogs.forEach((log) => {
+    const row = logSheet.addRow({
       date: log.date || '',
       project: log.project || '',
       tower: log.tower || '',
@@ -127,37 +252,49 @@ export async function exportReportExcel(masterItems, dailyLogs) {
       hours: Number(log.hours_worked) || 0,
       hasRestriction: log.has_restriction ? 'Sí' : 'No',
       restrictionDetail: log.restriction_detail || '',
-      observations: log.observations || ''
+      observations: log.observations || '',
     });
-    
-    // Marcar Restricciones en rojo
+
+    row.getCell('executed').numFmt = '#,##0';
+    row.getCell('hours').numFmt = '#,##0';
+    row.getCell('date').numFmt = 'dd/mm/yyyy';
+
     if (log.has_restriction) {
-       mainRow.getCell('hasRestriction').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
-       mainRow.getCell('hasRestriction').font = { color: { argb: 'FFB91C1C' }, bold: true };
+      const restrictionCell = row.getCell('hasRestriction');
+      restrictionCell.fill = /** @type {import('exceljs').FillPattern} */ ({
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEE2E2' },
+      });
+      restrictionCell.font = /** @type {Partial<import('exceljs').Font>} */ ({ color: { argb: 'FFB91C1C' }, bold: true });
     }
 
-    // Agregar desglose de personal si existe
     if (log.crew_workers?.length) {
-      log.crew_workers.forEach(w => {
-        const workerRow = logSheet.addRow({
+      /** @type {any[]} */
+      const crewWorkers = log.crew_workers;
+      crewWorkers.forEach((worker) => {
+        const crewRow = logSheet.addRow({
           date: '',
           project: '',
           tower: '',
           floor: '',
-          activity: `  └ ${w.name || ''}`,
-          supervisor: w.role || '',
-          executed: Number(w.executed) || 0,
-          hours: Number(w.hours) || 0,
+          activity: `  └ ${worker.name || ''}`,
+          supervisor: worker.role || '',
+          executed: Number(worker.executed) || 0,
+          hours: Number(worker.hours) || 0,
           hasRestriction: '',
           restrictionDetail: '',
-          observations: ''
+          observations: '',
         });
-        workerRow.font = { italic: true, color: { argb: 'FF64748B' } }; // Slate-500
+        crewRow.font = { italic: true, color: { argb: 'FF475569' } };
       });
     }
   });
 
-  // Guardar archivo
+  logSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
+  styleSheetRows(logSheet, 4);
+  logSheet.properties.tabColor = { argb: 'FB923C' };
+
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const filename = `informe_obra_${format(new Date(), 'yyyy-MM-dd', { locale: es })}.xlsx`;
