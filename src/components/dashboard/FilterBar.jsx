@@ -43,6 +43,16 @@ export default function FilterBar({
 }) {
   const { canCreateProjects } = usePermissions();
 
+  const towerOptions = [
+    ...new Set([...TOWERS, ...masterItems.map((item) => item.tower).filter(Boolean)]),
+  ];
+  const floorOptions = [
+    ...new Set([...FLOORS, ...masterItems.map((item) => item.floor).filter(Boolean)]),
+  ];
+  const activityOptions = [
+    ...new Set([...ACTIVITIES, ...masterItems.map((item) => item.activity).filter(Boolean)]),
+  ];
+
   const updateFilter = (key, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -61,14 +71,14 @@ export default function FilterBar({
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <Select
-          value={filters.project || 'all'}
+          value={filters.project || ''}
           onValueChange={(value) => updateFilter('project', value)}
         >
-          <SelectTrigger className="h-9 w-[150px] text-xs">
-            <SelectValue placeholder="Obra" />
+          <SelectTrigger className="h-9 w-[150px] text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Obras" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas las obras</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {projects.map((project) => (
               <SelectItem key={project.id} value={project.name}>
                 {project.name}
@@ -78,15 +88,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.tower || 'all'}
+          value={filters.tower || ''}
           onValueChange={(value) => updateFilter('tower', value)}
         >
-          <SelectTrigger className="h-9 w-[130px] text-xs">
-            <SelectValue placeholder="Torre" />
+          <SelectTrigger className="h-9 w-[130px] text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Torres" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            {TOWERS.map((tower) => (
+            {towerOptions.map((tower) => (
               <SelectItem key={tower} value={tower}>
                 {tower}
               </SelectItem>
@@ -95,15 +105,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.floor || 'all'}
+          value={filters.floor || ''}
           onValueChange={(value) => updateFilter('floor', value)}
         >
-          <SelectTrigger className="h-9 w-[120px] text-xs">
-            <SelectValue placeholder="Piso" />
+          <SelectTrigger className="h-9 w-[120px] text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Pisos" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
-            {FLOORS.map((floor) => (
+            {floorOptions.map((floor) => (
               <SelectItem key={floor} value={floor}>
                 {floor}
               </SelectItem>
@@ -112,15 +122,15 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.activity || 'all'}
+          value={filters.activity || ''}
           onValueChange={(value) => updateFilter('activity', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue placeholder="Actividad" />
+          <SelectTrigger className="h-9 w-[140px] text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Actividades" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
-            {ACTIVITIES.map((activity) => (
+            {activityOptions.map((activity) => (
               <SelectItem key={activity} value={activity}>
                 {activity}
               </SelectItem>
@@ -129,14 +139,14 @@ export default function FilterBar({
         </Select>
 
         <Select
-          value={filters.release || 'all'}
+          value={filters.release || ''}
           onValueChange={(value) => updateFilter('release', value)}
         >
-          <SelectTrigger className="h-9 w-[140px] text-xs">
-            <SelectValue placeholder="Estado liberación" />
+          <SelectTrigger className="h-9 w-[140px] text-xs text-foreground [&>span]:text-foreground">
+            <SelectValue placeholder="Liberación" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {RELEASE_STATUSES.map((status) => (
               <SelectItem key={status.value} value={status.value}>
                 {status.label}
