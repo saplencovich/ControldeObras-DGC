@@ -14,6 +14,9 @@ import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 function parseLocalDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`);
@@ -22,6 +25,7 @@ function parseLocalDate(dateStr) {
 export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [tooltip, setTooltip] = useState(null); // { rect, event } o { rect, allEvents }
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -33,6 +37,33 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   const masterItemIds = useMemo(
     () => new Set(masterItems.map((item) => item.id)),
     [masterItems]
+  );
+
+  const yearOptions = useMemo(() => {
+    const years = [new Date().getFullYear()];
+    [...masterItems, ...dailyLogs].forEach((item) => {
+      const raw = item?.date || item?.start_date || item?.end_date;
+      if (!raw) return;
+      const parsed = parseLocalDate(raw);
+      if (!Number.isNaN(parsed.getTime())) years.push(parsed.getFullYear());
+    });
+
+    const minYear = Math.min(...years) - 12;
+    const maxYear = Math.max(...years) + 12;
+    const range = [];
+    for (let year = maxYear; year >= minYear; year -= 1) {
+      range.push(year);
+    }
+    return range;
+  }, [dailyLogs, masterItems]);
+
+  const monthOptions = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, idx) => ({
+        value: idx,
+        label: format(new Date(2024, idx, 1), 'MMM', { locale: es }),
+      })),
+    []
   );
 
   const getEventsForDay = (day) => {
@@ -103,9 +134,59 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <span className="min-w-[120px] text-center text-sm font-medium capitalize">
-              {format(currentMonth, 'MMMM yyyy', { locale: es })}
-            </span>
+            <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="h-8 min-w-[150px] px-2 text-sm font-medium capitalize"
+                >
+                  {format(currentMonth, 'MMMM yyyy', { locale: es })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(92vw,320px)] p-3">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center">
+                    <Select
+                      value={String(currentMonth.getFullYear())}
+                      onValueChange={(value) =>
+                        setCurrentMonth(new Date(Number(value), currentMonth.getMonth(), 1))
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[140px] text-xs">
+                        <SelectValue placeholder="Año" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-64">
+                        {yearOptions.map((year) => (
+                          <SelectItem key={year} value={String(year)}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {monthOptions.map((month) => (
+                      <Button
+                        key={month.value}
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          'h-8 text-xs uppercase',
+                          currentMonth.getMonth() === month.value && 'bg-muted font-semibold'
+                        )}
+                        onClick={() => {
+                          setCurrentMonth(new Date(currentMonth.getFullYear(), month.value, 1));
+                          setMonthPickerOpen(false);
+                        }}
+                      >
+                        {month.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <Button
               variant="ghost"
