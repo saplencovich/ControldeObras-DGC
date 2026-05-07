@@ -127,6 +127,14 @@ function BuildingVisual({ floors }) {
         className="bg-slate-600 rounded-b-sm"
         style={{ width: 88, height: 5 }}
       />
+
+      <div className="flex flex-col gap-1 mt-3 p-2 bg-muted/30 rounded-md border border-border/50">
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-sm" /><span className="text-[9px] text-foreground/80">100%</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-300 rounded-sm" /><span className="text-[9px] text-foreground/80">&ge;75%</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-amber-400 rounded-sm" /><span className="text-[9px] text-foreground/80">&ge;50%</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-orange-300 rounded-sm" /><span className="text-[9px] text-foreground/80">&ge;25%</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-red-300 rounded-sm" /><span className="text-[9px] text-foreground/80">&gt;0%</span></div>
+      </div>
     </div>
   );
 }
@@ -364,8 +372,8 @@ export default function FloorProgress({ masterItems }) {
                         const pct =
                           data && data.planned > 0
                             ? Math.round(
-                                (data.executed / data.planned) * 100
-                              )
+                              (data.executed / data.planned) * 100
+                            )
                             : 0;
 
                         const actStyle = getFloorStatusStyle(pct);

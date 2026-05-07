@@ -69,7 +69,7 @@ export default function FilterBar({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Select
           value={filters.project || ''}
           onValueChange={(value) => updateFilter('project', value)}
@@ -154,16 +154,16 @@ export default function FilterBar({
             ))}
           </SelectContent>
         </Select>
+      </div>
 
-        <div className="relative w-full sm:col-span-2 lg:col-span-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar sector, responsable, restricción..."
-            className="h-9 pl-8 text-xs"
-            value={filters.search || ''}
-            onChange={updateSearch}
-          />
-        </div>
+      <div className="relative w-full">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Buscar sector, responsable, restricción..."
+          className="h-9 pl-8 text-xs"
+          value={filters.search || ''}
+          onChange={updateSearch}
+        />
       </div>
 
       <div className="-mx-1 overflow-x-auto px-1">

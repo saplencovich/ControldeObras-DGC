@@ -3,13 +3,13 @@ import { saveAs } from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/630dfa8aa_logoclientes-8.png';
+const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/6324de60d_logoclientes-8.png';
 
 /** @type {import('exceljs').FillPattern} */
 const headerFill = {
   type: 'pattern',
   pattern: 'solid',
-  fgColor: { argb: 'FF0F172A' },
+  fgColor: { argb: 'FF142952' }, // Azul primary
 };
 
 const headerFont = {
@@ -116,21 +116,25 @@ function styleTitleRows(sheet, subtitle, lastColumn) {
 
 /** @param {import('exceljs').Workbook} workbook */
 async function loadLogoImageId(workbook) {
-  try {
-    const response = await fetch(LOGO_URL);
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    const base64 = String(dataUrl).split(',')[1];
-    return workbook.addImage({ base64, extension: 'png' });
-  } catch {
-    return null;
-  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        resolve(workbook.addImage({ base64, extension: 'png' }));
+      } catch (err) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = LOGO_URL;
+  });
 }
 
 /** @param {import('exceljs').Worksheet} sheet @param {number|null} imageId */
@@ -213,7 +217,7 @@ export async function exportReportExcel(masterItems, dailyLogs) {
 
   masterSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
   styleSheetRows(masterSheet, 4);
-  masterSheet.properties.tabColor = { argb: 'F97316' };
+  masterSheet.properties.tabColor = { argb: '142952' };
 
   const logSheet = workbook.addWorksheet('Reportes Diarios', {
     properties: { defaultRowHeight: 24 },
@@ -293,7 +297,7 @@ export async function exportReportExcel(masterItems, dailyLogs) {
 
   logSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
   styleSheetRows(logSheet, 4);
-  logSheet.properties.tabColor = { argb: 'FB923C' };
+  logSheet.properties.tabColor = { argb: '2563EB' };
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

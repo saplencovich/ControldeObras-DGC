@@ -409,8 +409,8 @@ export default function ProductivityAnalytics() {
               <p className="text-xs text-muted-foreground mt-1">Fórmula: Total Ejecutado ÷ Horas Trabajadas = Productividad/h</p>
             </div>
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="h-8 w-32 text-xs">
-                <SelectValue />
+              <SelectTrigger className="h-8 w-[220px] text-xs">
+                <SelectValue placeholder="Ordenar por" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="productivity">Ordenar por productividad</SelectItem>
