@@ -190,6 +190,11 @@ export default function Dashboard() {
     return true;
   });
 
+  const filteredItemIds = new Set(filteredItems.map((i) => Number(i.id)));
+  const filteredLogs = dailyLogs.filter((log) =>
+    filteredItemIds.has(Number(log.master_item_id))
+  );
+
   const handleEdit = (item) => {
     setEditItem(item);
     setShowItemForm(true);
@@ -396,14 +401,14 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <KPICards masterItems={filteredItems} dailyLogs={dailyLogs} />
+      <KPICards masterItems={filteredItems} dailyLogs={filteredLogs} />
 
       <FilterBar
         filters={filters}
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
-        dailyLogs={dailyLogs}
+        dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
         onNewProject={() => setShowProjectForm(true)}
         onNewItem={() => {
@@ -415,7 +420,7 @@ export default function Dashboard() {
 
       <MasterPlanTable
         items={filteredItems}
-        dailyLogs={dailyLogs}
+        dailyLogs={filteredLogs}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onDailyLog={handleDailyLog}
@@ -423,11 +428,11 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-2">
-        <EventCalendar masterItems={filteredMasterItems} dailyLogs={dailyLogs} />
+        <EventCalendar masterItems={filteredItems} dailyLogs={filteredLogs} />
 
         <CrewProductivity
-          masterItems={filteredMasterItems}
-          dailyLogs={dailyLogs}
+          masterItems={filteredItems}
+          dailyLogs={filteredLogs}
         />
       </div>
 

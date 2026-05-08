@@ -22,6 +22,32 @@ import { usePermissions } from "@/lib/PermissionsContext";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
+import { MultiSelect } from "@/components/ui/multi-select";
+
+const FLOOR_OPTIONS = [
+  { label: "Piso 1", value: "Piso 1" },
+  { label: "Piso 2", value: "Piso 2" },
+  { label: "Piso 3", value: "Piso 3" },
+  { label: "Piso 4", value: "Piso 4" },
+  { label: "Piso 5", value: "Piso 5" },
+  { label: "Piso 6", value: "Piso 6" },
+  { label: "Piso 7", value: "Piso 7" },
+  { label: "Piso 8", value: "Piso 8" },
+  { label: "Piso 9", value: "Piso 9" },
+  { label: "Piso 10", value: "Piso 10" },
+  { label: "Piso 11", value: "Piso 11" },
+  { label: "Piso 12", value: "Piso 12" },
+  { label: "Piso 13", value: "Piso 13" },
+  { label: "Piso 14", value: "Piso 14" },
+  { label: "Piso 15", value: "Piso 15" },
+  { label: "Subterráneo 1", value: "Subterráneo 1" },
+  { label: "Subterráneo 2", value: "Subterráneo 2" },
+  { label: "Subterráneo 3", value: "Subterráneo 3" },
+  { label: "Subterráneo 4", value: "Subterráneo 4" },
+  { label: "Cubierta", value: "Cubierta" },
+  { label: "Exteriores", value: "Exteriores" },
+  { label: "Áreas Comunes", value: "Áreas Comunes" },
+];
 
 const EMPTY_MEMBER = { name: "", role: "" };
 
@@ -40,6 +66,7 @@ const INITIAL_FORM = {
   release_status: "no_liberado",
   restrictions: "",
   observations: "",
+  floors: [],
 };
 
 function getFormFromEditItem(editItem) {
@@ -58,6 +85,7 @@ function getFormFromEditItem(editItem) {
     release_status: editItem.release_status || "no_liberado",
     restrictions: editItem.restrictions || "",
     observations: editItem.observations || "",
+    floors: editItem.floor ? editItem.floor.split(",").map((f) => f.trim()) : [],
   };
 }
 
@@ -196,7 +224,7 @@ export default function MasterItemForm({
       ...form,
       project: form.project.trim(),
       tower: form.tower.trim(),
-      floor: form.floor.trim(),
+      floor: form.floors && form.floors.length > 0 ? form.floors.join(", ") : "",
       activity: form.activity.trim(),
       planned_qty: Number(form.planned_qty || 0),
       executed_qty: Number(form.executed_qty || 0),
@@ -349,6 +377,16 @@ export default function MasterItemForm({
                 value={form.tower}
                 onChange={(e) => updateFormField("tower", e.target.value)}
                 placeholder="Ej: Torre A, Bloque 1..."
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">Piso</Label>
+              <MultiSelect
+                options={FLOOR_OPTIONS}
+                selected={form.floors}
+                onChange={(val) => updateFormField("floors", val)}
+                placeholder="Seleccionar pisos..."
               />
             </div>
           </div>

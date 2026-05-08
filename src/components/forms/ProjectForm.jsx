@@ -10,11 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/lib/PermissionsContext";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 const INITIAL_FORM = {
   name: "",
@@ -26,33 +25,7 @@ const INITIAL_FORM = {
   status: "activa",
   start_date: "",
   end_date: "",
-  floors: [],
 };
-
-const FLOOR_OPTIONS = [
-  { label: "Piso 1", value: "Piso 1" },
-  { label: "Piso 2", value: "Piso 2" },
-  { label: "Piso 3", value: "Piso 3" },
-  { label: "Piso 4", value: "Piso 4" },
-  { label: "Piso 5", value: "Piso 5" },
-  { label: "Piso 6", value: "Piso 6" },
-  { label: "Piso 7", value: "Piso 7" },
-  { label: "Piso 8", value: "Piso 8" },
-  { label: "Piso 9", value: "Piso 9" },
-  { label: "Piso 10", value: "Piso 10" },
-  { label: "Piso 11", value: "Piso 11" },
-  { label: "Piso 12", value: "Piso 12" },
-  { label: "Piso 13", value: "Piso 13" },
-  { label: "Piso 14", value: "Piso 14" },
-  { label: "Piso 15", value: "Piso 15" },
-  { label: "Subterráneo 1", value: "Subterráneo 1" },
-  { label: "Subterráneo 2", value: "Subterráneo 2" },
-  { label: "Subterráneo 3", value: "Subterráneo 3" },
-  { label: "Subterráneo 4", value: "Subterráneo 4" },
-  { label: "Cubierta", value: "Cubierta" },
-  { label: "Exteriores", value: "Exteriores" },
-  { label: "Áreas Comunes", value: "Áreas Comunes" },
-];
 
 export default function ProjectForm({ open, onClose, onSave }) {
   const { canCreateProjects } = usePermissions();
@@ -123,7 +96,6 @@ export default function ProjectForm({ open, onClose, onSave }) {
             .filter(Boolean)
             .join(" | "),
         status: form.status || "activa",
-        floors: form.floors || [],
       };
 
       await onSave(payload);
@@ -188,16 +160,6 @@ export default function ProjectForm({ open, onClose, onSave }) {
               onChange={(e) => updateFormField("name", e.target.value)}
               options={projects.map((p) => p.name)}
               placeholder="Ej: Edificio Centro"
-            />
-          </div>
-
-          <div>
-            <Label className="text-xs">Pisos Disponibles</Label>
-            <MultiSelect
-              options={FLOOR_OPTIONS}
-              selected={form.floors}
-              onChange={(val) => updateFormField("floors", val)}
-              placeholder="Seleccionar pisos..."
             />
           </div>
 
