@@ -1,0 +1,167 @@
+CONTROL DE OBRAS DGC - PRUEBAS BACKEND LOCAL
+
+URL BASE:
+http://localhost:3001/api
+
+REQUISITOS:
+1. Entrar a backend:
+   cd backend
+
+2. Levantar servidor:
+   npm run dev
+
+3. Debe aparecer:
+   Servidor corriendo en http://localhost:3001
+   Base de datos SQLite conectada
+
+
+==================================================
+PROJECTS / OBRAS
+==================================================
+
+GET - Listar obras
+http://localhost:3001/api/projects
+
+GET - Buscar obra por ID
+http://localhost:3001/api/projects/1
+
+POST - Crear obra
+http://localhost:3001/api/projects
+
+Body JSON:
+{
+  "name": "Obra Demo",
+  "client": "Cliente Demo",
+  "address": "Santiago",
+  "description": "Obra de prueba",
+  "status": "activa",
+  "start_date": "2026-05-06",
+  "end_date": "2026-06-06",
+  "supervisor": "Samuel",
+  "capataz": "Juan"
+}
+
+
+==================================================
+MASTER ITEMS / ÍTEMS MAESTROS
+==================================================
+
+GET - Listar ítems
+http://localhost:3001/api/master-items
+
+GET - Buscar ítem por ID
+http://localhost:3001/api/master-items/1
+
+POST - Crear ítem maestro
+http://localhost:3001/api/master-items
+
+Body JSON:
+{
+  "project": "Obra Demo",
+  "tower": "Torre A",
+  "floor": "Piso 1",
+  "activity": "Luminarias",
+  "start_date": "2026-05-06",
+  "end_date": "2026-05-20",
+  "planned_qty": 100,
+  "executed_qty": 0,
+  "unit": "und",
+  "crew_name": "Cuadrilla A",
+  "crew_size": 4,
+  "crew_members": ["Juan", "Pedro", "Luis", "Carlos"],
+  "restrictions": "",
+  "observations": "Ítem de prueba",
+  "status": "pendiente",
+  "release_status": "no_liberado"
+}
+
+
+==================================================
+DAILY LOGS / REPORTES DIARIOS
+==================================================
+
+GET - Listar reportes diarios
+http://localhost:3001/api/daily-logs
+
+GET - Buscar reporte diario por ID
+http://localhost:3001/api/daily-logs/1
+
+GET - Listar reportes de un ítem maestro
+http://localhost:3001/api/master-items/1/daily-logs
+
+POST - Crear reporte diario desde ítem maestro
+IMPORTANTE: cambiar el 1 por el ID real del ítem maestro.
+
+http://localhost:3001/api/master-items/1/daily-logs
+
+Body JSON:
+{
+  "date": "2026-05-06",
+  "executed_today": 20,
+  "supervisor": "Samuel",
+  "crew_name": "Cuadrilla A",
+  "crew_workers": ["Juan", "Pedro"],
+  "hours_worked": 8,
+  "has_restriction": false,
+  "restriction_detail": "",
+  "observations": "Avance de prueba"
+}
+
+
+==================================================
+SITE PHOTOS / FOTOS
+==================================================
+
+GET - Listar fotos
+http://localhost:3001/api/site-photos
+
+GET - Buscar foto por ID
+http://localhost:3001/api/site-photos/1
+
+POST - Crear registro de foto
+NOTA: esto guarda solo la referencia en SQLite.
+La subida real del archivo físico se implementará después.
+
+http://localhost:3001/api/site-photos
+
+Body JSON:
+{
+  "daily_log_id": 1,
+  "master_item_id": 1,
+  "file_url": "/uploads/foto-demo.jpg",
+  "description": "Foto de prueba",
+  "label": "avance",
+  "date": "2026-05-06"
+}
+
+
+==================================================
+AUDIT LOGS / AUDITORÍA
+==================================================
+
+GET - Listar auditorías
+http://localhost:3001/api/audit-logs
+
+POST - Crear auditoría
+http://localhost:3001/api/audit-logs
+
+Body JSON:
+{
+  "action": "crear",
+  "entity_name": "MasterItem",
+  "entity_id": "1",
+  "user_name": "Samuel",
+  "user_email": "local@demo.cl",
+  "description": "Prueba de auditoría local",
+  "previous_data": ""
+}
+
+
+==================================================
+NOTAS
+==================================================
+
+1. Para POST usar Body tipo JSON en Thunder Client.
+
+5. El frontend debe tener en .env:
+   VITE_API_URL=http://localhost:3001/api
