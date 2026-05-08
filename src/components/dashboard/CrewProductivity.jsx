@@ -37,6 +37,19 @@ function getWorkerCount(logs, members) {
   return workerSet.size || (members?.length || 0);
 }
 
+function getParsedMembers(crew_members) {
+  if (Array.isArray(crew_members)) return crew_members;
+  if (typeof crew_members === "string") {
+    try {
+      const parsed = JSON.parse(crew_members);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function getExpectedProgress(items, logs) {
   const itemsWithLogs = new Set(logs.map((log) => log.master_item_id));
   const today = new Date();
@@ -96,10 +109,14 @@ export default function CrewProductivity({ masterItems = [], dailyLogs = [] }) {
     if (!crewMap[crew]) {
       crewMap[crew] = {
         crew,
-        members: item.crew_members || [],
+        members: getParsedMembers(item.crew_members),
         items: [],
         logs: [],
       };
+    } else {
+      if (crewMap[crew].members.length === 0) {
+        crewMap[crew].members = getParsedMembers(item.crew_members);
+      }
     }
 
     crewMap[crew].items.push(item);
