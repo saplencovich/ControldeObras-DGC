@@ -19,6 +19,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, ClipboardList } from "lucide-react";
 import { usePermissions } from "@/lib/PermissionsContext";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 const EMPTY_MEMBER = { name: "", role: "" };
 
@@ -86,6 +89,11 @@ export default function MasterItemForm({
   projects = [],
 }) {
   const { hasAccessToProject, userRole } = usePermissions();
+
+  const { data: allItems = [] } = useQuery({
+    queryKey: ["masterItems"],
+    queryFn: () => api.get("/master-items"),
+  });
 
   // Modo local para no bloquear proyectos por permisos mientras desarrollas.
   const isLocalMode = true;
@@ -256,6 +264,30 @@ export default function MasterItemForm({
     Number(form.planned_qty) <= 0 ||
     saving;
 
+  const uniqueActivities = Array.from(
+    new Set(allItems.map((i) => i.activity))
+  ).filter(Boolean);
+
+  const uniqueCrewNames = Array.from(
+    new Set(allItems.map((i) => i.crew_name))
+  ).filter(Boolean);
+
+  const uniqueMemberNames = Array.from(
+    new Set(
+      allItems.flatMap((i) => {
+        try {
+          const members = JSON.parse(i.crew_members);
+          return Array.isArray(members) ? members.map((m) => m.name) : [];
+        } catch {
+          return [];
+        }
+      })
+    )
+  ).filter(Boolean);
+
+  const selectedProjectObj = projects.find((p) => p.name === form.project);
+  const availableFloors = selectedProjectObj?.floors || [];
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -301,9 +333,10 @@ export default function MasterItemForm({
 
             <div>
               <Label className="text-xs">Actividad *</Label>
-              <Input
+              <AutocompleteInput
                 value={form.activity}
                 onChange={(e) => updateFormField("activity", e.target.value)}
+                options={uniqueActivities}
                 placeholder="Ej: Artefactos, Luminarias..."
               />
             </div>
@@ -316,15 +349,6 @@ export default function MasterItemForm({
                 value={form.tower}
                 onChange={(e) => updateFormField("tower", e.target.value)}
                 placeholder="Ej: Torre A, Bloque 1..."
-              />
-            </div>
-
-            <div>
-              <Label className="text-xs">Piso</Label>
-              <Input
-                value={form.floor}
-                onChange={(e) => updateFormField("floor", e.target.value)}
-                placeholder="Ej: Piso 1, Subterráneo..."
               />
             </div>
           </div>
@@ -386,9 +410,10 @@ export default function MasterItemForm({
 
           <div>
             <Label className="text-xs">Nombre Cuadrilla</Label>
-            <Input
+            <AutocompleteInput
               value={form.crew_name}
               onChange={(e) => updateFormField("crew_name", e.target.value)}
+              options={uniqueCrewNames}
               placeholder="Ej: Cuadrilla Reyes"
             />
           </div>
@@ -420,11 +445,12 @@ export default function MasterItemForm({
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
               {crewMembers.map((member, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <Input
+                  <AutocompleteInput
                     value={member.name}
                     onChange={(e) =>
                       updateMember(index, "name", e.target.value)
                     }
+                    options={uniqueMemberNames}
                     placeholder="Nombre"
                     className="h-8 flex-1 text-xs"
                   />

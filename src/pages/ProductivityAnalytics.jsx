@@ -45,7 +45,7 @@ export default function ProductivityAnalytics() {
   // Datos de productividad por fecha
   const productivityByDate = useMemo(() => {
     const grouped = {};
-    
+
     filteredLogs.forEach(log => {
       const dateStr = log.date;
       if (!grouped[dateStr]) {
@@ -73,19 +73,19 @@ export default function ProductivityAnalytics() {
   // Datos por cuadrilla (crew_name)
   const crewProductivity = useMemo(() => {
     const crews = {};
-    
+
     filteredLogs.forEach(log => {
       if (selectedCrew !== 'all' && log.crew_name !== selectedCrew) return;
-      
+
       const crewName = log.crew_name || 'Sin cuadrilla asignada';
       if (!crews[crewName]) {
-        crews[crewName] = { 
-          name: crewName, 
+        crews[crewName] = {
+          name: crewName,
           supervisor: log.supervisor,
-          hours: 0, 
-          executed: 0, 
-          days: 0, 
-          items: [] 
+          hours: 0,
+          executed: 0,
+          days: 0,
+          items: []
         };
       }
       crews[crewName].hours += log.hours_worked || 0;
@@ -120,21 +120,21 @@ export default function ProductivityAnalytics() {
   // Datos de productividad individual por trabajador
   const workerProductivity = useMemo(() => {
     const workers = {};
-    
+
     filteredLogs.forEach(log => {
       if (selectedCrew !== 'all' && log.crew_name !== selectedCrew) return;
-      
+
       log.crew_workers?.forEach(w => {
         if (!w.name) return;
         const key = `${w.name}|${w.role}`;
         if (!workers[key]) {
-          workers[key] = { 
-            name: w.name, 
+          workers[key] = {
+            name: w.name,
             role: w.role,
             crew: log.crew_name,
-            hours: 0, 
-            executed: 0, 
-            days: 0 
+            hours: 0,
+            executed: 0,
+            days: 0
           };
         }
         workers[key].hours += w.hours || 0;
@@ -182,7 +182,7 @@ export default function ProductivityAnalytics() {
           </SelectContent>
         </Select>
 
-        <Select value={selectedCrew} onValueChange={setSelectedCrew} disabled={crewNames.length === 0}>
+        <Select value={selectedCrew} onValueChange={setSelectedCrew}>
           <SelectTrigger className="h-8 w-48 text-xs">
             <SelectValue placeholder="Filtrar por cuadrilla" />
           </SelectTrigger>
@@ -256,8 +256,8 @@ export default function ProductivityAnalytics() {
       {/* Info sobre cálculo de productividad */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
         <p className="text-xs text-blue-700">
-          <strong>📊 Cálculo de Productividad:</strong> Se calcula como <strong>unidades ejecutadas ÷ horas trabajadas</strong>. 
-          Ej: Si 3 trabajadores hacen 12 unidades en 6 horas = 2 unidades/hora. 
+          <strong>📊 Cálculo de Productividad:</strong> Se calcula como <strong>unidades ejecutadas ÷ horas trabajadas</strong>.
+          Ej: Si 3 trabajadores hacen 12 unidades en 6 horas = 2 unidades/hora.
           <strong> Límites legales: máximo 10h/día, 42h/semana.</strong>
         </p>
       </div>
