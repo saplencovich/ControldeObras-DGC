@@ -454,16 +454,7 @@ export default function MasterPlanTable({
                             {log.observations || "—"}
                           </TableCell>
 
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => safeOnDeleteLog(log, item)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
+                          <TableCell />
                         </TableRow>
                       ))}
                   </React.Fragment>

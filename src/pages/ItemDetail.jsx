@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Camera, CheckSquare, FileText, Users } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { api } from '@/lib/api';
@@ -11,7 +11,6 @@ import { Card, CardContent } from '@/components/ui/card';
 
 import ItemInfo from '../components/detail/ItemInfo';
 import DailyLogTable from '../components/detail/DailyLogTable';
-import ChecklistSection from '../components/detail/ChecklistSection';
 import WorkerProductivity from '../components/detail/WorkerProductivity';
 import PhotoGallery from '../components/detail/PhotoGallery';
 import DailyLogForm from '../components/forms/DailyLogForm';
@@ -58,13 +57,7 @@ export default function ItemDetail() {
     ...queryOptions,
   });
 
-  const { data: checklistEntries = [] } = useQuery({
-    queryKey: ['checklist', itemId],
-    queryFn: () =>
-      api.get(`/checklist-entries?master_item_id=${encodeURIComponent(itemId)}`),
-    enabled: !!itemId,
-    ...queryOptions,
-  });
+
 
   const { data: workers = [] } = useQuery({
     queryKey: ['workers', itemId],
@@ -81,32 +74,7 @@ export default function ItemDetail() {
     ...queryOptions,
   });
 
-  const handleToggleChecklist = async (itemName, existing) => {
-    try {
-      if (existing) {
-        await api.put(`/checklist-entries/${existing.id}`, {
-          ...existing,
-          completed: !existing.completed,
-          completed_by: existing.completed ? '' : user?.full_name || '',
-          completed_date: existing.completed
-            ? ''
-            : format(new Date(), 'yyyy-MM-dd'),
-        });
-      } else {
-        await api.post('/checklist-entries', {
-          master_item_id: itemId,
-          item_name: itemName,
-          completed: true,
-          completed_by: user?.full_name || '',
-          completed_date: format(new Date(), 'yyyy-MM-dd'),
-        });
-      }
 
-      await queryClient.invalidateQueries({ queryKey: ['checklist', itemId] });
-    } catch (error) {
-      console.error('Error al actualizar checklist:', error);
-    }
-  };
 
   const handleSaveLog = async (data) => {
     try {
@@ -126,6 +94,46 @@ export default function ItemDetail() {
     setShowLogForm(false);
     queryClient.invalidateQueries({ queryKey: ['photos', itemId] });
     queryClient.invalidateQueries({ queryKey: ['dailyLogs', itemId] });
+  };
+
+  const handleDeleteLog = async (log) => {
+    const confirmed = window.confirm(`¿Eliminar el reporte del ${log.date}?`);
+    if (!confirmed) return;
+
+    try {
+      if (item) {
+        await api.put(`/master-items/${item.id}`, {
+          ...item,
+          executed_qty: Math.max(
+            Number(item.executed_qty || 0) - Number(log.executed_today || 0),
+            0
+          ),
+        });
+      }
+
+      const relatedPhotos = photos.filter(photo => photo.daily_log_id === log.id);
+      for (const photo of relatedPhotos) {
+        await api.delete(`/site-photos/${photo.id}`);
+      }
+
+      await api.delete(`/daily-logs/${log.id}`);
+
+      await api.post("/audit-logs", {
+        action: "eliminar",
+        entity_name: "DailyLog",
+        entity_id: log.id,
+        user_name: user?.full_name || "",
+        user_email: user?.email || "",
+        description: `Eliminó reporte del ${log.date} (${item?.activity || ""} - ${item?.project || ""})`,
+        previous_data: JSON.stringify(log),
+      }).catch(e => console.warn(e));
+
+      await queryClient.invalidateQueries({ queryKey: ['dailyLogs', itemId] });
+      await queryClient.invalidateQueries({ queryKey: ['masterItems'] });
+      await queryClient.invalidateQueries({ queryKey: ['photos', itemId] });
+    } catch (error) {
+      console.error('Error al eliminar reporte:', error);
+    }
   };
 
   if (loadingItem) {
@@ -151,9 +159,7 @@ export default function ItemDetail() {
   const scopedLogs = logs.filter(
     (log) => String(log.master_item_id) === String(itemId)
   );
-  const scopedChecklistEntries = checklistEntries.filter(
-    (entry) => String(entry.master_item_id) === String(itemId)
-  );
+
   const scopedWorkers = workers.filter(
     (worker) => String(worker.master_item_id) === String(itemId)
   );
@@ -161,7 +167,7 @@ export default function ItemDetail() {
     (photo) => String(photo.master_item_id) === String(itemId)
   );
 
-  const completedChecklist = scopedChecklistEntries.filter((entry) => entry.completed).length;
+
   const totalExecutedInLogs = scopedLogs.reduce(
     (sum, log) => sum + (Number(log.executed_today) || 0),
     0
@@ -178,12 +184,7 @@ export default function ItemDetail() {
       hint: `Ejecutado en bitácora: ${totalExecutedInLogs}`,
       icon: FileText,
     },
-    {
-      title: 'Checklist',
-      value: `${completedChecklist}/${Math.max(scopedChecklistEntries.length, 0)}`,
-      hint: 'Ítems marcados',
-      icon: CheckSquare,
-    },
+
     {
       title: 'Registro fotográfico',
       value: scopedPhotos.length,
@@ -216,7 +217,7 @@ export default function ItemDetail() {
 
       <ItemInfo item={item} />
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {overviewCards.map((card) => (
           <Card key={card.title} className="border-0 shadow-sm">
             <CardContent className="flex items-center justify-between p-4">
@@ -231,13 +232,8 @@ export default function ItemDetail() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <DailyLogTable logs={scopedLogs} onAddLog={() => setShowLogForm(true)} />
-
-        <ChecklistSection
-          entries={scopedChecklistEntries}
-          onToggle={handleToggleChecklist}
-        />
+      <div className="w-full">
+        <DailyLogTable logs={scopedLogs} onAddLog={() => setShowLogForm(true)} onDeleteLog={handleDeleteLog} />
       </div>
 
       <WorkerProductivity logs={scopedLogs} workers={scopedWorkers} />

@@ -24,6 +24,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 import SignaturePad from "./SignaturePad";
 
@@ -86,7 +89,31 @@ export default function DailyLogForm({
   const [signatureImage, setSignatureImage] = useState(null);
   const [error, setError] = useState("");
 
+  const { data: allLogs = [] } = useQuery({
+    queryKey: ['allDailyLogsForAutocomplete'],
+    queryFn: () => api.get('/daily-logs'),
+    staleTime: 1000 * 60 * 5,
+    enabled: open,
+  });
+
+  const { data: allWorkers = [] } = useQuery({
+    queryKey: ['allWorkersForAutocomplete'],
+    queryFn: () => api.get('/workers'),
+    staleTime: 1000 * 60 * 5,
+    enabled: open,
+  });
+
+  const uniqueSupervisors = Array.from(new Set(allLogs.map(log => log.supervisor).filter(Boolean))).sort();
+  const uniqueCapatazNames = Array.from(new Set(allLogs.map(log => log.capataz_name).filter(Boolean))).sort();
+  
+  const logWorkers = allLogs.flatMap(log => log.crew_workers || []);
+  const allWorkerData = [...allWorkers, ...logWorkers];
+  
+  const uniqueWorkerNames = Array.from(new Set(allWorkerData.map(w => w.name).filter(Boolean))).sort();
+  const uniqueWorkerRoles = Array.from(new Set(allWorkerData.map(w => w.role).filter(Boolean))).sort();
+
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -358,9 +385,10 @@ export default function DailyLogForm({
 
             <div>
               <Label className="text-xs">Supervisor</Label>
-              <Input
+              <AutocompleteInput
                 value={form.supervisor}
                 onChange={(e) => updateFormField("supervisor", e.target.value)}
+                options={uniqueSupervisors}
               />
             </div>
           </div>
@@ -488,21 +516,23 @@ export default function DailyLogForm({
                   key={index}
                   className="grid grid-cols-1 gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] sm:items-center sm:border-0 sm:p-0"
                 >
-                  <Input
+                  <AutocompleteInput
                     placeholder="Nombre"
                     className="h-8 text-xs"
                     value={worker.name}
                     onChange={(e) =>
                       updateWorker(index, "name", e.target.value)
                     }
+                    options={uniqueWorkerNames}
                   />
-                  <Input
+                  <AutocompleteInput
                     placeholder="Cargo"
                     className="h-8 text-xs"
                     value={worker.role}
                     onChange={(e) =>
                       updateWorker(index, "role", e.target.value)
                     }
+                    options={uniqueWorkerRoles}
                   />
                   <Input
                     type="number"
@@ -588,22 +618,42 @@ export default function DailyLogForm({
                 )}
               </Label>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1 text-xs"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus className="h-3 w-3" />
-                Agregar foto
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => cameraInputRef.current?.click()}
+                >
+                  <Camera className="h-3 w-3" />
+                  Cámara
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Plus className="h-3 w-3" />
+                  Galería
+                </Button>
+              </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 multiple
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={handlePhotoUpload}
               />
@@ -659,12 +709,13 @@ export default function DailyLogForm({
 
             <div>
               <Label className="text-xs">Nombre del capataz</Label>
-              <Input
+              <AutocompleteInput
                 placeholder="Nombre completo"
                 value={form.capataz_name}
                 onChange={(e) =>
                   updateFormField("capataz_name", e.target.value)
                 }
+                options={uniqueCapatazNames}
               />
             </div>
 
