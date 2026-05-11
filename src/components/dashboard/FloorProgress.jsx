@@ -8,11 +8,23 @@ import { cn } from '@/lib/utils';
 
 function sortFloorsDesc(floors) {
   return [...floors].sort((a, b) => {
-    const numA = parseInt(String(a.floor), 10) || 0;
-    const numB = parseInt(String(b.floor), 10) || 0;
+    const numA = getFloorNumber(a.floor);
+    const numB = getFloorNumber(b.floor);
     if (numB !== numA) return numB - numA;
     return String(a.floor).localeCompare(String(b.floor), 'es');
   });
+}
+
+function getFloorNumber(floor) {
+  const match = String(floor || '').match(/-?\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function getItemFloors(floor) {
+  return String(floor || 'Sin piso')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function getFloorStatusStyle(pct) {
@@ -84,6 +96,9 @@ function getFloorStatusStyle(pct) {
 function BuildingVisual({ floors }) {
   if (!floors.length) return null;
 
+  const floorHeight = floors.length > 24 ? 14 : floors.length > 16 ? 17 : 22;
+  const labelSize = floors.length > 24 ? 'text-[8px]' : 'text-[9px]';
+
   return (
     <div className="flex flex-col items-center gap-0.5 select-none">
       <div className="w-1 h-4 bg-slate-400 rounded-full mx-auto mb-0.5" />
@@ -104,14 +119,14 @@ function BuildingVisual({ floors }) {
           <div
             key={f.floor}
             className={`${bg} ${text} flex items-center justify-between px-2 border border-white/60 transition-all`}
-            style={{ width: 72, height: 22 }}
+            style={{ width: 76, height: floorHeight }}
             title={`${f.floor}: ${f.pct}%`}
           >
-            <span className="text-[9px] font-semibold truncate max-w-[32px]">
+            <span className={`${labelSize} font-semibold truncate max-w-[38px]`}>
               {f.floor}
             </span>
 
-            <span className="text-[9px] font-bold">
+            <span className={`${labelSize} font-bold`}>
               {label}
             </span>
           </div>
@@ -120,12 +135,12 @@ function BuildingVisual({ floors }) {
 
       <div
         className="bg-slate-800 rounded-b-sm"
-        style={{ width: 80, height: 8 }}
+        style={{ width: 84, height: 8 }}
       />
 
       <div
         className="bg-slate-600 rounded-b-sm"
-        style={{ width: 88, height: 5 }}
+        style={{ width: 92, height: 5 }}
       />
 
       <div className="flex flex-col gap-1 mt-3 p-2 bg-muted/30 rounded-md border border-border/50">
@@ -164,44 +179,46 @@ export default function FloorProgress({ masterItems }) {
   const floorMap = {};
 
   filtered.forEach((item) => {
-    const floor = item.floor || 'Sin piso';
+    const itemFloors = getItemFloors(item.floor);
 
-    if (!floorMap[floor]) {
-      floorMap[floor] = {
-        floor,
-        startDate: item.start_date,
-        activities: {},
-        totalPlanned: 0,
-        totalExecuted: 0,
-      };
-    }
+    itemFloors.forEach((floor) => {
+      if (!floorMap[floor]) {
+        floorMap[floor] = {
+          floor,
+          startDate: item.start_date,
+          activities: {},
+          totalPlanned: 0,
+          totalExecuted: 0,
+        };
+      }
 
-    if (!floorMap[floor].startDate && item.start_date) {
-      floorMap[floor].startDate = item.start_date;
-    }
+      if (!floorMap[floor].startDate && item.start_date) {
+        floorMap[floor].startDate = item.start_date;
+      }
 
-    if (
-      item.start_date &&
-      floorMap[floor].startDate &&
-      item.start_date < floorMap[floor].startDate
-    ) {
-      floorMap[floor].startDate = item.start_date;
-    }
+      if (
+        item.start_date &&
+        floorMap[floor].startDate &&
+        item.start_date < floorMap[floor].startDate
+      ) {
+        floorMap[floor].startDate = item.start_date;
+      }
 
-    const act = item.activity || 'General';
+      const act = item.activity || 'General';
 
-    if (!floorMap[floor].activities[act]) {
-      floorMap[floor].activities[act] = {
-        planned: 0,
-        executed: 0,
-      };
-    }
+      if (!floorMap[floor].activities[act]) {
+        floorMap[floor].activities[act] = {
+          planned: 0,
+          executed: 0,
+        };
+      }
 
-    floorMap[floor].activities[act].planned += item.planned_qty || 0;
-    floorMap[floor].activities[act].executed += item.executed_qty || 0;
+      floorMap[floor].activities[act].planned += item.planned_qty || 0;
+      floorMap[floor].activities[act].executed += item.executed_qty || 0;
 
-    floorMap[floor].totalPlanned += item.planned_qty || 0;
-    floorMap[floor].totalExecuted += item.executed_qty || 0;
+      floorMap[floor].totalPlanned += item.planned_qty || 0;
+      floorMap[floor].totalExecuted += item.executed_qty || 0;
+    });
   });
 
   const floors = Object.values(floorMap).map((f) => ({
