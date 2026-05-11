@@ -12,7 +12,8 @@ const statusColor = {
 };
 
 export default function ItemInfo({ item }) {
-  const pct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
+  const rawPct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
+  const pct = Math.min(rawPct, 100);
 
   let crewSize = item.crew_size || 0;
   if (!crewSize && item.crew_members) {

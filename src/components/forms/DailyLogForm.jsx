@@ -69,9 +69,18 @@ function buildCrewWorkers(workers) {
 function calculateTotalHours(formHoursWorked, crewWorkers) {
   if (formHoursWorked) return Number(formHoursWorked);
 
-  return crewWorkers.reduce((sum, worker) => {
-    return sum + Number(worker.hours || 0);
+  return crewWorkers.reduce((maxHours, worker) => {
+    return Math.max(maxHours, Number(worker.hours || 0));
   }, 0);
+}
+
+function getRemainingQty(masterItem) {
+  if (!masterItem) return 0;
+
+  return Math.max(
+    Number(masterItem.planned_qty || 0) - Number(masterItem.executed_qty || 0),
+    0
+  );
 }
 
 export default function DailyLogForm({
@@ -245,7 +254,7 @@ export default function DailyLogForm({
 
     const planned = Number(masterItem.planned_qty || 0);
     const executed = Number(masterItem.executed_qty || 0);
-    const remaining = planned - executed;
+    const remaining = getRemainingQty(masterItem);
 
     if (remaining <= 0) return null;
 
@@ -294,6 +303,19 @@ export default function DailyLogForm({
         throw new Error("Debe ingresar la cantidad ejecutada hoy.");
       }
 
+      const remainingQty = getRemainingQty(masterItem);
+      const executedToday = Number(form.executed_today);
+
+      if (remainingQty <= 0) {
+        throw new Error("Este ítem ya alcanzó la cantidad planificada.");
+      }
+
+      if (executedToday > remainingQty) {
+        throw new Error(
+          `La cantidad ejecutada hoy no puede superar el pendiente (${remainingQty} ${masterItem.unit || "und"}).`
+        );
+      }
+
       if (REQUIRE_PHOTO && photos.length === 0) {
         throw new Error("Debe cargar al menos una foto del sitio.");
       }
@@ -316,7 +338,7 @@ export default function DailyLogForm({
       await onSave({
         ...form,
         crew_name: form.crew_name || masterItem?.crew_name || "",
-        executed_today: Number(form.executed_today),
+        executed_today: executedToday,
         hours_worked: totalHours,
         crew_workers: crewWorkers,
         capataz_signature: signatureImage,
@@ -338,9 +360,13 @@ export default function DailyLogForm({
   };
 
   const goalInfo = getDailyGoalInfo();
+  const remainingQty = getRemainingQty(masterItem);
+  const executedTodayQty = Number(form.executed_today || 0);
 
   const isSaveDisabled =
     !form.executed_today ||
+    remainingQty <= 0 ||
+    executedTodayQty > remainingQty ||
     saving ||
     (REQUIRE_PHOTO && photos.length === 0) ||
     (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) ||
@@ -407,11 +433,18 @@ export default function DailyLogForm({
               <Label className="text-xs">Ejecutado hoy *</Label>
               <Input
                 type="number"
+                min="0"
+                max={remainingQty || undefined}
                 value={form.executed_today}
                 onChange={(e) =>
                   updateFormField("executed_today", e.target.value)
                 }
               />
+              {masterItem && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Máximo permitido: {remainingQty} {masterItem.unit || "und"}.
+                </p>
+              )}
 
               {goalInfo && (
                 <div
@@ -474,11 +507,7 @@ export default function DailyLogForm({
               <span>
                 Pendiente:{" "}
                 <b>
-                  {Math.max(
-                    Number(masterItem.planned_qty || 0) -
-                      Number(masterItem.executed_qty || 0),
-                    0
-                  )}
+                  {remainingQty}
                 </b>
               </span>
             </div>

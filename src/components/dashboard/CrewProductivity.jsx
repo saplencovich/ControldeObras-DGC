@@ -50,6 +50,26 @@ function getParsedMembers(crew_members) {
   return [];
 }
 
+function getLogCrewHours(log) {
+  const workerHours = Array.isArray(log.crew_workers)
+    ? log.crew_workers.map((worker) => Number(worker.hours || 0))
+    : [];
+
+  const totalWorkerHours = workerHours.reduce((sum, hours) => sum + hours, 0);
+  const maxWorkerHours = Math.max(...workerHours, 0);
+  const logHours = Number(log.hours_worked || 0);
+
+  if (logHours <= 0) return maxWorkerHours;
+
+  // Legacy logs may have stored person-hours, e.g. 2 workers x 8h = 16h.
+  // For crew productivity we want shift hours, so collapse that case to 8h.
+  if (workerHours.length > 1 && logHours === totalWorkerHours) {
+    return maxWorkerHours;
+  }
+
+  return logHours;
+}
+
 function getExpectedProgress(items, logs) {
   const itemsWithLogs = new Set(logs.map((log) => log.master_item_id));
   const today = new Date();
@@ -132,17 +152,10 @@ export default function CrewProductivity({ masterItems = [], dailyLogs = [] }) {
   });
 
   const crews = Object.values(crewMap).map((crewData) => {
-    let totalHours = 0;
-
-    crewData.logs.forEach((log) => {
-      if (log.crew_workers?.length) {
-        log.crew_workers.forEach((worker) => {
-          totalHours += worker.hours || 0;
-        });
-      } else {
-        totalHours += log.hours_worked || 0;
-      }
-    });
+    const totalHours = crewData.logs.reduce(
+      (sum, log) => sum + getLogCrewHours(log),
+      0
+    );
 
     const totalExecuted = crewData.items.reduce(
       (sum, item) => sum + (item.executed_qty || 0),
