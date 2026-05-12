@@ -90,21 +90,6 @@ router.post("/", (req, res) => {
       }
 
       const executedToday = toNumber(executed_today);
-      const plannedQty = toNumber(item.planned_qty);
-      const currentExecutedQty = toNumber(item.executed_qty);
-      const remainingQty = Math.max(plannedQty - currentExecutedQty, 0);
-
-      if (executedToday <= 0) {
-        return res.status(400).json({
-          error: "La cantidad ejecutada debe ser mayor a 0",
-        });
-      }
-
-      if (plannedQty > 0 && executedToday > remainingQty) {
-        return res.status(400).json({
-          error: `La cantidad ejecutada supera el pendiente (${remainingQty})`,
-        });
-      }
 
       const sql = `
         INSERT INTO daily_logs (
@@ -150,7 +135,7 @@ router.post("/", (req, res) => {
       db.run(sql, values, function (err) {
         if (err) return res.status(500).json({ error: err.message });
 
-        const newExecutedQty = currentExecutedQty + executedToday;
+        const newExecutedQty = toNumber(item.executed_qty) + executedToday;
 
         db.run(
           `
