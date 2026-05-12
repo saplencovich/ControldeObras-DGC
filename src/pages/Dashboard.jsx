@@ -17,6 +17,7 @@ import DailyLogForm from "../components/forms/DailyLogForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { itemHasFloor } from "@/utils/floors";
 
 function DashboardSkeleton() {
   return (
@@ -168,7 +169,7 @@ export default function Dashboard() {
   const filteredItems = filteredMasterItems.filter((item) => {
     if (filters.project && item.project !== filters.project) return false;
     if (filters.tower && item.tower !== filters.tower) return false;
-    if (filters.floor && item.floor !== filters.floor) return false;
+    if (!itemHasFloor(item.floor, filters.floor)) return false;
     if (filters.activity && item.activity !== filters.activity) return false;
     if (filters.release && item.release_status !== filters.release) return false;
 
@@ -408,6 +409,7 @@ export default function Dashboard() {
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
+        filterOptionItems={filteredMasterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
         onNewProject={() => setShowProjectForm(true)}

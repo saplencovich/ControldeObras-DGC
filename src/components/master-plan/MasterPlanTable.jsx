@@ -30,6 +30,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { getFloorList } from "@/utils/floors";
 
 const statusBadge = {
   pendiente: "bg-slate-100 text-slate-600",
@@ -69,13 +70,6 @@ function formatNumber(value) {
   if (Number.isInteger(number)) return number;
 
   return number.toFixed(2);
-}
-
-function getFloorList(floor) {
-  return String(floor || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
 }
 
 function FloorsDisplay({ floor, compact = false }) {
@@ -264,8 +258,8 @@ export default function MasterPlanTable({
                 <TableHead className="text-xs">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
-                <TableHead className="text-xs">F. Inicio</TableHead>
-                <TableHead className="text-xs">F. Término</TableHead>
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">F. Inicio</TableHead>
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">F. Término</TableHead>
                 <TableHead className="text-right text-xs">Plan</TableHead>
                 <TableHead className="text-right text-xs">Ejecutado</TableHead>
                 <TableHead className="text-xs">Und</TableHead>
@@ -343,11 +337,11 @@ export default function MasterPlanTable({
                         {item.activity || "—"}
                       </TableCell>
 
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground">
                         {item.start_date || "—"}
                       </TableCell>
 
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground">
                         {item.end_date || "—"}
                       </TableCell>
 
