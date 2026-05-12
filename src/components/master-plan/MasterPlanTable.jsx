@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
+  UserRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -54,9 +55,12 @@ function getProgressPct(item) {
 }
 
 function getProductivityColor(pct) {
-  if (pct >= 80) return "bg-emerald-500";
+  if (pct >= 100) return "bg-emerald-500";
+  if (pct >= 75) return "bg-emerald-300";
   if (pct >= 50) return "bg-amber-400";
-  return "bg-red-500";
+  if (pct >= 25) return "bg-orange-300";
+  if (pct > 0) return "bg-red-300";
+  return "bg-slate-200";
 }
 
 function formatNumber(value) {
@@ -67,8 +71,48 @@ function formatNumber(value) {
   return number.toFixed(2);
 }
 
+function getFloorList(floor) {
+  return String(floor || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function FloorsDisplay({ floor, compact = false }) {
+  const floors = getFloorList(floor);
+
+  if (floors.length === 0) return "—";
+
+  const visibleCount = compact ? 2 : 4;
+  const visibleFloors = floors.slice(0, visibleCount);
+  const remainingCount = floors.length - visibleFloors.length;
+
+  return (
+    <div
+      className="flex max-w-[220px] flex-wrap items-center gap-1"
+      title={floors.join(", ")}
+    >
+      {visibleFloors.map((item) => (
+        <span
+          key={item}
+          className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground/80"
+        >
+          {item}
+        </span>
+      ))}
+
+      {remainingCount > 0 && (
+        <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+          +{remainingCount}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
 export default function MasterPlanTable({
   items = [],
+  projects = [],
   dailyLogs = [],
   onEdit,
   onDelete,
@@ -76,6 +120,13 @@ export default function MasterPlanTable({
   onDeleteLog,
 }) {
   const [expandedItems, setExpandedItems] = useState({});
+
+  const projectSupervisorByName = useMemo(() => {
+    return projects.reduce((acc, project) => {
+      if (project.name) acc[project.name] = project.supervisor || "";
+      return acc;
+    }, {});
+  }, [projects]);
 
   const logsByItemId = useMemo(() => {
     return dailyLogs.reduce((acc, log) => {
@@ -142,8 +193,15 @@ export default function MasterPlanTable({
                   <div>
                     <p className="text-sm font-semibold">{item.activity}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {item.project} — {item.tower || '—'} — {item.floor || '—'}
+                      {item.project} — {item.tower || '—'}
                     </p>
+                    <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <UserRound className="h-3 w-3" />
+                      {projectSupervisorByName[item.project] || "Sin supervisor"}
+                    </p>
+                    <div className="mt-1">
+                      <FloorsDisplay floor={item.floor} compact />
+                    </div>
                   </div>
                   <Badge className={`text-[10px] ${statusBadge[item.status] || statusBadge.pendiente}`}>
                     {statusLabel[item.status] || item.status}
@@ -202,6 +260,7 @@ export default function MasterPlanTable({
               <TableRow className="bg-muted/50">
                 <TableHead className="w-8 text-xs" />
                 <TableHead className="text-xs">Proyecto</TableHead>
+                <TableHead className="text-xs">Supervisor</TableHead>
                 <TableHead className="text-xs">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
@@ -225,7 +284,7 @@ export default function MasterPlanTable({
               {items.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={16}
+                    colSpan={17}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
                     No hay ítems en el plan maestro. Crea uno nuevo para
@@ -271,8 +330,14 @@ export default function MasterPlanTable({
                         {item.project || "—"}
                       </TableCell>
 
+                      <TableCell className="text-muted-foreground">
+                        {projectSupervisorByName[item.project] || "—"}
+                      </TableCell>
+
                       <TableCell>{item.tower || "—"}</TableCell>
-                      <TableCell>{item.floor || "—"}</TableCell>
+                      <TableCell className="min-w-[160px] max-w-[240px]">
+                        <FloorsDisplay floor={item.floor} />
+                      </TableCell>
 
                       <TableCell className="font-medium">
                         {item.activity || "—"}
@@ -393,7 +458,7 @@ export default function MasterPlanTable({
                           <TableCell className="p-1" />
 
                           <TableCell
-                            colSpan={4}
+                            colSpan={5}
                             className="pl-6 text-muted-foreground"
                           >
                             <span className="inline-flex items-center gap-1.5">
@@ -451,16 +516,7 @@ export default function MasterPlanTable({
                             {log.observations || "—"}
                           </TableCell>
 
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => safeOnDeleteLog(log, item)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
+                          <TableCell />
                         </TableRow>
                       ))}
                   </React.Fragment>

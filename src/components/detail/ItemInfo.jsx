@@ -12,7 +12,20 @@ const statusColor = {
 };
 
 export default function ItemInfo({ item }) {
-  const pct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
+  const rawPct = item.planned_qty > 0 ? Math.round((item.executed_qty || 0) / item.planned_qty * 100) : 0;
+  const pct = Math.min(rawPct, 100);
+
+  let crewSize = item.crew_size || 0;
+  if (!crewSize && item.crew_members) {
+    if (Array.isArray(item.crew_members)) {
+      crewSize = item.crew_members.length;
+    } else if (typeof item.crew_members === 'string') {
+      try {
+        const parsed = JSON.parse(item.crew_members);
+        if (Array.isArray(parsed)) crewSize = parsed.length;
+      } catch (e) {}
+    }
+  }
 
   return (
     <Card className="border-0 shadow-sm">
@@ -35,7 +48,7 @@ export default function ItemInfo({ item }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Cuadrilla</p>
-            <p className="text-sm font-medium">{item.crew_name || '—'} ({item.crew_size || 0} pers.)</p>
+            <p className="text-sm font-medium">{item.crew_name || '—'} ({crewSize} pers.)</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Plan / Ejecutado</p>

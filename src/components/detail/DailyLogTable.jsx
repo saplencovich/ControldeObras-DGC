@@ -3,9 +3,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FileText, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 
-export default function DailyLogTable({ logs, onAddLog }) {
+export default function DailyLogTable({ logs, onAddLog, onDeleteLog }) {
   const [expandedLog, setExpandedLog] = useState(null);
 
   return (
@@ -26,18 +26,19 @@ export default function DailyLogTable({ logs, onAddLog }) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="text-xs">Fecha</TableHead>
+                <TableHead className="text-xs w-[110px] whitespace-nowrap">Fecha</TableHead>
                 <TableHead className="text-xs">Supervisor</TableHead>
                 <TableHead className="text-xs text-right">Ejecutado</TableHead>
                 <TableHead className="text-xs text-right">Horas</TableHead>
                 <TableHead className="text-xs text-center">Restricción</TableHead>
                 <TableHead className="text-xs">Observaciones</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                     Sin registros en la bitácora
                   </TableCell>
                 </TableRow>
@@ -48,7 +49,7 @@ export default function DailyLogTable({ logs, onAddLog }) {
                     className="hover:bg-muted/30 text-xs cursor-pointer"
                     onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         {log.crew_workers?.length > 0 && (
                           expandedLog === log.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
@@ -69,11 +70,24 @@ export default function DailyLogTable({ logs, onAddLog }) {
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {log.has_restriction && log.restriction_detail ? log.restriction_detail : log.observations || '—'}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onDeleteLog) onDeleteLog(log);
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                   
                   {expandedLog === log.id && log.crew_workers?.length > 0 && (
                     <TableRow className="bg-muted/20">
-                      <TableCell colSpan={6} className="p-4">
+                      <TableCell colSpan={7} className="p-4">
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground mb-3">
                             Integrantes de la cuadrilla — {log.crew_name}

@@ -1,63 +1,74 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
-async function request(path, options = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+async function request(endpoint, options = {}) {
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    ...options,
+  });
 
-  try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-      signal: controller.signal,
-      ...options,
-    });
+  if (!response.ok) {
+    let message = "Error en la petición";
 
-    const contentType = response.headers.get('content-type');
-
-    let data;
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      data = await response.text();
+    try {
+      const error = await response.json();
+      message = error.error || message;
+    } catch {
+      message = response.statusText || message;
     }
 
-    if (!response.ok) {
-      throw new Error(
-        data?.message || data || `HTTP ${response.status}`
-      );
-    }
-
-    return data;
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error('Timeout: el servidor no respondió');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
+    throw new Error(message);
   }
+
+  return response.json();
+}
+
+async function uploadPhoto(file) {
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  const response = await fetch(`${API_URL}/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let message = "Error subiendo imagen";
+
+    try {
+      const error = await response.json();
+      message = error.error || message;
+    } catch {
+      message = response.statusText || message;
+    }
+
+    throw new Error(message);
+  }
+
+  return response.json();
 }
 
 export const api = {
-  get: (path) => request(path),
+  get: (endpoint) => request(endpoint),
 
-  post: (path, data) =>
-    request(path, {
-      method: 'POST',
+  post: (endpoint, data) =>
+    request(endpoint, {
+      method: "POST",
       body: JSON.stringify(data),
     }),
 
-  put: (path, data) =>
-    request(path, {
-      method: 'PUT',
+  put: (endpoint, data) =>
+    request(endpoint, {
+      method: "PUT",
       body: JSON.stringify(data),
     }),
 
-  delete: (path) =>
-    request(path, {
-      method: 'DELETE',
+  delete: (endpoint) =>
+    request(endpoint, {
+      method: "DELETE",
     }),
+
+  uploadPhoto,
 };

@@ -12,6 +12,26 @@ function normalizeStatus(status) {
   return status;
 }
 
+function normalizeProjectName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function findProjectByName(name, excludeId, callback) {
+  const normalizedName = normalizeProjectName(name);
+
+  db.all("SELECT id, name FROM projects", [], (err, projects) => {
+    if (err) return callback(err);
+
+    const match = projects.find(
+      (project) =>
+        normalizeProjectName(project.name) === normalizedName &&
+        (!excludeId || Number(project.id) !== Number(excludeId))
+    );
+
+    callback(null, match);
+  });
+}
+
 router.get("/", (req, res) => {
   db.all("SELECT * FROM projects ORDER BY id DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -58,51 +78,61 @@ router.post("/", (req, res) => {
 
   const projectAddress = address || location || "";
 
-  const sql = `
-    INSERT INTO projects (
-      name,
-      client,
-      address,
-      description,
-      status,
-      start_date,
-      end_date,
-      supervisor,
-      capataz
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  findProjectByName(projectName, null, (err, existingProject) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-  db.run(
-    sql,
-    [
-      projectName,
-      client || "",
-      projectAddress,
-      description || "",
-      normalizeStatus(status),
-      start_date || "",
-      end_date || "",
-      supervisor || "",
-      capataz || "",
-    ],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      res.status(201).json({
-        id: this.lastID,
-        name: projectName,
-        client: client || "",
-        address: projectAddress,
-        description: description || "",
-        status: normalizeStatus(status),
-        start_date: start_date || "",
-        end_date: end_date || "",
-        supervisor: supervisor || "",
-        capataz: capataz || "",
+    if (existingProject) {
+      return res.status(409).json({
+        error: `Ya existe una obra con el nombre "${existingProject.name}". Usa otro nombre o edita la obra existente.`,
       });
     }
-  );
+
+    const sql = `
+      INSERT INTO projects (
+        name,
+        client,
+        address,
+        description,
+        status,
+        start_date,
+        end_date,
+        supervisor,
+        capataz
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.run(
+      sql,
+      [
+        projectName,
+        client || "",
+        projectAddress,
+        description || "",
+        normalizeStatus(status),
+        start_date || "",
+        end_date || "",
+        supervisor || "",
+        capataz || "",
+      ],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+
+        res.status(201).json({
+          id: this.lastID,
+          name: projectName,
+          client: client || "",
+          address: projectAddress,
+          description: description || "",
+          status: normalizeStatus(status),
+          start_date: start_date || "",
+          end_date: end_date || "",
+          supervisor: supervisor || "",
+          capataz: capataz || "",
+        });
+      }
+    );
+  });
 });
 
 router.put("/:id", (req, res) => {
@@ -131,56 +161,66 @@ router.put("/:id", (req, res) => {
 
   const projectAddress = address || location || "";
 
-  const sql = `
-    UPDATE projects
-    SET
-      name = ?,
-      client = ?,
-      address = ?,
-      description = ?,
-      status = ?,
-      start_date = ?,
-      end_date = ?,
-      supervisor = ?,
-      capataz = ?
-    WHERE id = ?
-  `;
+  findProjectByName(projectName, id, (err, existingProject) => {
+    if (err) return res.status(500).json({ error: err.message });
 
-  db.run(
-    sql,
-    [
-      projectName,
-      client || "",
-      projectAddress,
-      description || "",
-      normalizeStatus(status),
-      start_date || "",
-      end_date || "",
-      supervisor || "",
-      capataz || "",
-      id,
-    ],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      if (this.changes === 0) {
-        return res.status(404).json({ error: "Obra no encontrada" });
-      }
-
-      res.json({
-        id: Number(id),
-        name: projectName,
-        client: client || "",
-        address: projectAddress,
-        description: description || "",
-        status: normalizeStatus(status),
-        start_date: start_date || "",
-        end_date: end_date || "",
-        supervisor: supervisor || "",
-        capataz: capataz || "",
+    if (existingProject) {
+      return res.status(409).json({
+        error: `Ya existe una obra con el nombre "${existingProject.name}". Usa otro nombre.`,
       });
     }
-  );
+
+    const sql = `
+      UPDATE projects
+      SET
+        name = ?,
+        client = ?,
+        address = ?,
+        description = ?,
+        status = ?,
+        start_date = ?,
+        end_date = ?,
+        supervisor = ?,
+        capataz = ?
+      WHERE id = ?
+    `;
+
+    db.run(
+      sql,
+      [
+        projectName,
+        client || "",
+        projectAddress,
+        description || "",
+        normalizeStatus(status),
+        start_date || "",
+        end_date || "",
+        supervisor || "",
+        capataz || "",
+        id,
+      ],
+      function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+
+        if (this.changes === 0) {
+          return res.status(404).json({ error: "Obra no encontrada" });
+        }
+
+        res.json({
+          id: Number(id),
+          name: projectName,
+          client: client || "",
+          address: projectAddress,
+          description: description || "",
+          status: normalizeStatus(status),
+          start_date: start_date || "",
+          end_date: end_date || "",
+          supervisor: supervisor || "",
+          capataz: capataz || "",
+        });
+      }
+    );
+  });
 });
 
 router.delete("/:id", (req, res) => {

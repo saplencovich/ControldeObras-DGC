@@ -211,7 +211,6 @@ export default function FilterBar({
           variant="outline"
           size="sm"
           className="h-8 gap-1.5 text-xs"
-          disabled
         >
           <Upload className="h-3 w-3" />
           Importar CSV

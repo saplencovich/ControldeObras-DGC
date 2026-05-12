@@ -25,6 +25,7 @@ export default function Restrictions() {
   const navigate = useNavigate();
   const { hasAccessToProject, userRole } = usePermissions();
   const [selectedProject, setSelectedProject] = useState('all');
+  const [selectedActivity, setSelectedActivity] = useState('all');
 
   const { data: masterItems = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['masterItems'],
@@ -82,8 +83,18 @@ export default function Restrictions() {
       relatedId: log.master_item_id,
     }));
 
-  const allRestrictions = [...activeRestrictions, ...logRestrictions].sort(
+  const allRestrictionsBase = [...activeRestrictions, ...logRestrictions].sort(
     (a, b) => new Date(b.date) - new Date(a.date)
+  );
+
+  const uniqueActivities = Array.from(
+    new Set(allRestrictionsBase.map((r) => r.activity))
+  )
+    .filter(Boolean)
+    .sort();
+
+  const allRestrictions = allRestrictionsBase.filter(
+    (r) => selectedActivity === 'all' || r.activity === selectedActivity
   );
 
   const stats = {
@@ -181,6 +192,20 @@ export default function Restrictions() {
             {filteredProjects.map((p) => (
               <SelectItem key={p.id} value={p.name}>
                 {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedActivity} onValueChange={setSelectedActivity}>
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue placeholder="Filtrar por actividad" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las actividades</SelectItem>
+            {uniqueActivities.map((act) => (
+              <SelectItem key={act} value={act}>
+                {act}
               </SelectItem>
             ))}
           </SelectContent>

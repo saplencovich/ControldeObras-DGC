@@ -10,7 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/lib/PermissionsContext";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { AlertTriangle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 
 const INITIAL_FORM = {
   name: "",
@@ -24,8 +27,17 @@ const INITIAL_FORM = {
   end_date: "",
 };
 
+function normalizeProjectName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export default function ProjectForm({ open, onClose, onSave }) {
   const { canCreateProjects } = usePermissions();
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: () => api.get("/projects"),
+  });
 
   // Modo local para poder probar sin depender todavía de permisos reales.
   const isLocalMode = true;
@@ -62,9 +74,17 @@ export default function ProjectForm({ open, onClose, onSave }) {
 
   const handleSave = async () => {
     const name = form.name.trim();
+    const duplicateProject = projects.find(
+      (project) => normalizeProjectName(project.name) === normalizeProjectName(name)
+    );
 
     if (!name) {
       setError("El nombre de la obra es obligatorio.");
+      return;
+    }
+
+    if (duplicateProject) {
+      setError(`Ya existe una obra con el nombre "${duplicateProject.name}".`);
       return;
     }
 
@@ -129,11 +149,17 @@ export default function ProjectForm({ open, onClose, onSave }) {
     );
   }
 
-  const isFormInvalid = !form.name.trim() || saving;
+  const duplicateProject = form.name.trim()
+    ? projects.find(
+        (project) =>
+          normalizeProjectName(project.name) === normalizeProjectName(form.name)
+      )
+    : null;
+  const isFormInvalid = !form.name.trim() || Boolean(duplicateProject) || saving;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Obra</DialogTitle>
         </DialogHeader>
@@ -147,11 +173,17 @@ export default function ProjectForm({ open, onClose, onSave }) {
 
           <div>
             <Label className="text-xs">Nombre de la Obra *</Label>
-            <Input
+            <AutocompleteInput
               value={form.name}
               onChange={(e) => updateFormField("name", e.target.value)}
+              options={projects.map((p) => p.name)}
               placeholder="Ej: Edificio Centro"
             />
+            {duplicateProject && (
+              <p className="mt-1 text-xs text-red-600">
+                Ya existe una obra con este nombre. Selecciona la existente o usa otro nombre.
+              </p>
+            )}
           </div>
 
           <div>

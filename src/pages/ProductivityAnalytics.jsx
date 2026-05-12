@@ -29,6 +29,11 @@ export default function ProductivityAnalytics() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  const handleProjectChange = (project) => {
+    setSelectedProject(project);
+    setSelectedCrew('all');
+  };
+
   // Filtrar proyectos según permisos
   const filteredProjects = userRole === 'admin'
     ? projects
@@ -42,14 +47,30 @@ export default function ProductivityAnalytics() {
   // Obtener cuadrillas únicas desde crew_name
   const crewNames = [...new Set(filteredLogs.map(l => l.crew_name).filter(Boolean))];
 
+  const selectedLogs = selectedCrew === 'all'
+    ? filteredLogs
+    : filteredLogs.filter(log => log.crew_name === selectedCrew);
+
+  const totals = useMemo(() => {
+    const executed = selectedLogs.reduce((sum, log) => sum + (log.executed_today || 0), 0);
+    const hours = selectedLogs.reduce((sum, log) => sum + (log.hours_worked || 0), 0);
+
+    return {
+      executed,
+      hours,
+      reports: selectedLogs.length,
+      productivity: hours > 0 ? (executed / hours).toFixed(2) : null,
+    };
+  }, [selectedLogs]);
+
   // Datos de productividad por fecha
   const productivityByDate = useMemo(() => {
     const grouped = {};
-    
-    filteredLogs.forEach(log => {
+
+    selectedLogs.forEach(log => {
       const dateStr = log.date;
       if (!grouped[dateStr]) {
-        grouped[dateStr] = { date: dateStr, hours: 0, executed: 0, items: 0, workers: new Set() };
+        grouped[dateStr] = { date: dateStr, label: '', hours: 0, executed: 0, items: 0, workers: new Set() };
       }
       grouped[dateStr].hours += log.hours_worked || 0;
       grouped[dateStr].executed += log.executed_today || 0;
@@ -59,33 +80,29 @@ export default function ProductivityAnalytics() {
 
     return Object.entries(grouped)
       .map(([date, data]) => ({
-        date: format(parse(date, 'yyyy-MM-dd', new Date()), 'MMM dd'),
+        ...data,
+        label: format(parse(date, 'yyyy-MM-dd', new Date()), 'MMM dd'),
         productivity: data.hours > 0 ? (data.executed / data.hours).toFixed(2) : 0,
-        executed: data.executed,
-        hours: data.hours,
-        items: data.items,
         workers: data.workers.size,
       }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .sort((a, b) => parse(a.date, 'yyyy-MM-dd', new Date()) - parse(b.date, 'yyyy-MM-dd', new Date()))
       .slice(-30); // Últimos 30 días
-  }, [filteredLogs]);
+  }, [selectedLogs]);
 
   // Datos por cuadrilla (crew_name)
   const crewProductivity = useMemo(() => {
     const crews = {};
-    
-    filteredLogs.forEach(log => {
-      if (selectedCrew !== 'all' && log.crew_name !== selectedCrew) return;
-      
+
+    selectedLogs.forEach(log => {
       const crewName = log.crew_name || 'Sin cuadrilla asignada';
       if (!crews[crewName]) {
-        crews[crewName] = { 
-          name: crewName, 
+        crews[crewName] = {
+          name: crewName,
           supervisor: log.supervisor,
-          hours: 0, 
-          executed: 0, 
-          days: 0, 
-          items: [] 
+          hours: 0,
+          executed: 0,
+          days: 0,
+          items: []
         };
       }
       crews[crewName].hours += log.hours_worked || 0;
@@ -106,7 +123,7 @@ export default function ProductivityAnalytics() {
         if (sortBy === 'name') return a.name.localeCompare(b.name);
         return 0;
       });
-  }, [filteredLogs, selectedCrew, sortBy]);
+  }, [selectedLogs, sortBy]);
 
   // Datos acumulativos de avance
   const cumulativeProgress = useMemo(() => {
@@ -120,21 +137,19 @@ export default function ProductivityAnalytics() {
   // Datos de productividad individual por trabajador
   const workerProductivity = useMemo(() => {
     const workers = {};
-    
-    filteredLogs.forEach(log => {
-      if (selectedCrew !== 'all' && log.crew_name !== selectedCrew) return;
-      
+
+    selectedLogs.forEach(log => {
       log.crew_workers?.forEach(w => {
         if (!w.name) return;
         const key = `${w.name}|${w.role}`;
         if (!workers[key]) {
-          workers[key] = { 
-            name: w.name, 
+          workers[key] = {
+            name: w.name,
             role: w.role,
             crew: log.crew_name,
-            hours: 0, 
-            executed: 0, 
-            days: 0 
+            hours: 0,
+            executed: 0,
+            days: 0
           };
         }
         workers[key].hours += w.hours || 0;
@@ -150,7 +165,7 @@ export default function ProductivityAnalytics() {
         avgPerDay: (w.executed / w.days).toFixed(1),
       }))
       .sort((a, b) => b.executed - a.executed);
-  }, [filteredLogs, selectedCrew]);
+  }, [selectedLogs]);
 
   if (logsLoading) {
     return (
@@ -172,7 +187,7 @@ export default function ProductivityAnalytics() {
 
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
-        <Select value={selectedProject} onValueChange={setSelectedProject}>
+        <Select value={selectedProject} onValueChange={handleProjectChange}>
           <SelectTrigger className="h-8 w-48 text-xs">
             <SelectValue placeholder="Filtrar por obra" />
           </SelectTrigger>
@@ -182,13 +197,13 @@ export default function ProductivityAnalytics() {
           </SelectContent>
         </Select>
 
-        <Select value={selectedCrew} onValueChange={setSelectedCrew} disabled={crewNames.length === 0}>
+        <Select value={selectedCrew} onValueChange={setSelectedCrew}>
           <SelectTrigger className="h-8 w-48 text-xs">
             <SelectValue placeholder="Filtrar por cuadrilla" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las cuadrillas</SelectItem>
-            {crewNames.map(crew => <SelectItem key={crew} value={crew}>{crew || 'Sin supervisor'}</SelectItem>)}
+            {crewNames.map(crew => <SelectItem key={crew} value={crew}>{crew || 'Sin cuadrilla'}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -201,9 +216,7 @@ export default function ProductivityAnalytics() {
               <div>
                 <p className="text-xs text-muted-foreground">Productividad Promedio</p>
                 <p className="text-2xl font-bold mt-1">
-                  {crewProductivity.length > 0
-                    ? (crewProductivity.reduce((a, b) => a + parseFloat(b.productivity), 0) / crewProductivity.length).toFixed(2)
-                    : '—'}
+                  {totals.productivity ?? '—'}
                   <span className="text-sm text-muted-foreground">/h</span>
                 </p>
               </div>
@@ -218,7 +231,7 @@ export default function ProductivityAnalytics() {
               <div>
                 <p className="text-xs text-muted-foreground">Total Ejecutado</p>
                 <p className="text-2xl font-bold mt-1">
-                  {filteredLogs.reduce((sum, l) => sum + (l.executed_today || 0), 0)}
+                  {totals.executed}
                 </p>
               </div>
               <Zap className="w-8 h-8 text-accent/30" />
@@ -232,7 +245,7 @@ export default function ProductivityAnalytics() {
               <div>
                 <p className="text-xs text-muted-foreground">Horas Totales</p>
                 <p className="text-2xl font-bold mt-1">
-                  {filteredLogs.reduce((sum, l) => sum + (l.hours_worked || 0), 0)}h
+                  {totals.hours}h
                 </p>
               </div>
               <Users className="w-8 h-8 text-accent/30" />
@@ -245,7 +258,7 @@ export default function ProductivityAnalytics() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Reportes</p>
-                <p className="text-2xl font-bold mt-1">{filteredLogs.length}</p>
+                <p className="text-2xl font-bold mt-1">{totals.reports}</p>
               </div>
               <TrendingUp className="w-8 h-8 text-accent/30" />
             </div>
@@ -256,8 +269,8 @@ export default function ProductivityAnalytics() {
       {/* Info sobre cálculo de productividad */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
         <p className="text-xs text-blue-700">
-          <strong>📊 Cálculo de Productividad:</strong> Se calcula como <strong>unidades ejecutadas ÷ horas trabajadas</strong>. 
-          Ej: Si 3 trabajadores hacen 12 unidades en 6 horas = 2 unidades/hora. 
+          <strong>📊 Cálculo de Productividad:</strong> Se calcula como <strong>unidades ejecutadas ÷ horas trabajadas</strong>.
+          Ej: Si 3 trabajadores hacen 12 unidades en 6 horas = 2 unidades/hora.
           <strong> Límites legales: máximo 10h/día, 42h/semana.</strong>
         </p>
       </div>
@@ -277,7 +290,7 @@ export default function ProductivityAnalytics() {
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={productivityByDate}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                   <Line type="monotone" dataKey="productivity" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ fill: 'hsl(var(--chart-1))' }} />
@@ -299,7 +312,7 @@ export default function ProductivityAnalytics() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={cumulativeProgress}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                   <Bar dataKey="cumulative" fill="hsl(var(--chart-2))" />
@@ -321,7 +334,7 @@ export default function ProductivityAnalytics() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={productivityByDate}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                   <Legend />

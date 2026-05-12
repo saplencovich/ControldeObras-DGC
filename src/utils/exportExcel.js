@@ -231,6 +231,8 @@ export async function exportReportExcel(masterItems, dailyLogs) {
     { header: 'Piso', key: 'floor', width: 14 },
     { header: 'Actividad', key: 'activity', width: 32 },
     { header: 'Supervisor', key: 'supervisor', width: 24 },
+    { header: 'Trabajador', key: 'worker', width: 24 },
+    { header: 'Cargo', key: 'role', width: 20 },
     { header: 'Ejecutado Hoy', key: 'executed', width: 16 },
     { header: 'Horas', key: 'hours', width: 14 },
     { header: 'Restricción', key: 'hasRestriction', width: 16 },
@@ -240,18 +242,27 @@ export async function exportReportExcel(masterItems, dailyLogs) {
 
   logSheet.insertRow(1, ['Informe de Reportes Diarios']);
   logSheet.insertRow(2, ['']);
-  styleTitleRows(logSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'K');
+  styleTitleRows(logSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'M');
   insertLogo(logSheet, logoImageId);
   styleHeader(logSheet.getRow(3));
 
   dailyLogs.forEach((log) => {
+    const masterItem = masterItems.find(mi => String(mi.id) === String(log.master_item_id));
+    
+    const project = log.project || masterItem?.project || '';
+    const tower = log.tower || masterItem?.tower || '';
+    const floor = log.floor || masterItem?.floor || '';
+    const activity = log.activity || masterItem?.activity || '';
+
     const row = logSheet.addRow({
       date: log.date || '',
-      project: log.project || '',
-      tower: log.tower || '',
-      floor: log.floor || '',
-      activity: log.activity || '',
+      project: project,
+      tower: tower,
+      floor: floor,
+      activity: activity,
       supervisor: log.supervisor || '',
+      worker: '(Total Cuadrilla)',
+      role: '',
       executed: Number(log.executed_today) || 0,
       hours: Number(log.hours_worked) || 0,
       hasRestriction: log.has_restriction ? 'Sí' : 'No',
@@ -259,6 +270,7 @@ export async function exportReportExcel(masterItems, dailyLogs) {
       observations: log.observations || '',
     });
 
+    row.font = { bold: true };
     row.getCell('executed').numFmt = '#,##0';
     row.getCell('hours').numFmt = '#,##0';
     row.getCell('date').numFmt = 'dd/mm/yyyy';
@@ -273,17 +285,24 @@ export async function exportReportExcel(masterItems, dailyLogs) {
       restrictionCell.font = /** @type {Partial<import('exceljs').Font>} */ ({ color: { argb: 'FFB91C1C' }, bold: true });
     }
 
-    if (log.crew_workers?.length) {
-      /** @type {any[]} */
-      const crewWorkers = log.crew_workers;
+    let crewWorkers = [];
+    if (Array.isArray(log.crew_workers)) {
+      crewWorkers = log.crew_workers;
+    } else if (typeof log.crew_workers === 'string') {
+      try { crewWorkers = JSON.parse(log.crew_workers); } catch (e) {}
+    }
+
+    if (crewWorkers?.length) {
       crewWorkers.forEach((worker) => {
         const crewRow = logSheet.addRow({
-          date: '',
-          project: '',
-          tower: '',
-          floor: '',
-          activity: `  └ ${worker.name || ''}`,
-          supervisor: worker.role || '',
+          date: log.date || '',
+          project: project,
+          tower: tower,
+          floor: floor,
+          activity: '',
+          supervisor: '',
+          worker: `  └ ${worker.name || ''}`,
+          role: worker.role || '',
           executed: Number(worker.executed) || 0,
           hours: Number(worker.hours) || 0,
           hasRestriction: '',
@@ -295,7 +314,7 @@ export async function exportReportExcel(masterItems, dailyLogs) {
     }
   });
 
-  logSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 11 } };
+  logSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 13 } };
   styleSheetRows(logSheet, 4);
   logSheet.properties.tabColor = { argb: '2563EB' };
 

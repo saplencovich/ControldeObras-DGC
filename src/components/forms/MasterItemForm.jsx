@@ -19,6 +19,50 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, ClipboardList } from "lucide-react";
 import { usePermissions } from "@/lib/PermissionsContext";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
+import { MultiSelect } from "@/components/ui/multi-select";
+
+const FLOOR_OPTIONS = [
+  { label: "Piso 1", value: "Piso 1" },
+  { label: "Piso 2", value: "Piso 2" },
+  { label: "Piso 3", value: "Piso 3" },
+  { label: "Piso 4", value: "Piso 4" },
+  { label: "Piso 5", value: "Piso 5" },
+  { label: "Piso 6", value: "Piso 6" },
+  { label: "Piso 7", value: "Piso 7" },
+  { label: "Piso 8", value: "Piso 8" },
+  { label: "Piso 9", value: "Piso 9" },
+  { label: "Piso 10", value: "Piso 10" },
+  { label: "Piso 11", value: "Piso 11" },
+  { label: "Piso 12", value: "Piso 12" },
+  { label: "Piso 13", value: "Piso 13" },
+  { label: "Piso 14", value: "Piso 14" },
+  { label: "Piso 15", value: "Piso 15" },
+  { label: "Piso 16", value: "Piso 16" },
+  { label: "Piso 17", value: "Piso 17" },
+  { label: "Piso 18", value: "Piso 18" },
+  { label: "Piso 19", value: "Piso 19" },
+  { label: "Piso 20", value: "Piso 20" },
+  { label: "Piso 21", value: "Piso 21" },
+  { label: "Piso 22", value: "Piso 22" },
+  { label: "Piso 23", value: "Piso 23" },
+  { label: "Piso 24", value: "Piso 24" },
+  { label: "Piso 25", value: "Piso 25" },
+  { label: "Piso 26", value: "Piso 26" },
+  { label: "Piso 27", value: "Piso 27" },
+  { label: "Piso 28", value: "Piso 28" },
+  { label: "Piso 29", value: "Piso 29" },
+  { label: "Piso 30", value: "Piso 30" },
+  { label: "Subterráneo 1", value: "Subterráneo 1" },
+  { label: "Subterráneo 2", value: "Subterráneo 2" },
+  { label: "Subterráneo 3", value: "Subterráneo 3" },
+  { label: "Subterráneo 4", value: "Subterráneo 4" },
+  { label: "Cubierta", value: "Cubierta" },
+  { label: "Exteriores", value: "Exteriores" },
+  { label: "Áreas Comunes", value: "Áreas Comunes" },
+];
 
 const EMPTY_MEMBER = { name: "", role: "" };
 
@@ -37,6 +81,7 @@ const INITIAL_FORM = {
   release_status: "no_liberado",
   restrictions: "",
   observations: "",
+  floors: [],
 };
 
 function getFormFromEditItem(editItem) {
@@ -55,6 +100,7 @@ function getFormFromEditItem(editItem) {
     release_status: editItem.release_status || "no_liberado",
     restrictions: editItem.restrictions || "",
     observations: editItem.observations || "",
+    floors: editItem.floor ? editItem.floor.split(",").map((f) => f.trim()) : [],
   };
 }
 
@@ -86,6 +132,11 @@ export default function MasterItemForm({
   projects = [],
 }) {
   const { hasAccessToProject, userRole } = usePermissions();
+
+  const { data: allItems = [] } = useQuery({
+    queryKey: ["masterItems"],
+    queryFn: () => api.get("/master-items"),
+  });
 
   // Modo local para no bloquear proyectos por permisos mientras desarrollas.
   const isLocalMode = true;
@@ -188,7 +239,7 @@ export default function MasterItemForm({
       ...form,
       project: form.project.trim(),
       tower: form.tower.trim(),
-      floor: form.floor.trim(),
+      floor: form.floors && form.floors.length > 0 ? form.floors.join(", ") : "",
       activity: form.activity.trim(),
       planned_qty: Number(form.planned_qty || 0),
       executed_qty: Number(form.executed_qty || 0),
@@ -197,7 +248,7 @@ export default function MasterItemForm({
       restrictions: form.restrictions.trim(),
       observations: form.observations.trim(),
       crew_size: validMembers.length,
-      crew_members: validMembers,
+      crew_members: JSON.stringify(validMembers),
     };
   };
 
@@ -256,6 +307,30 @@ export default function MasterItemForm({
     Number(form.planned_qty) <= 0 ||
     saving;
 
+  const uniqueActivities = Array.from(
+    new Set(allItems.map((i) => i.activity))
+  ).filter(Boolean);
+
+  const uniqueCrewNames = Array.from(
+    new Set(allItems.map((i) => i.crew_name))
+  ).filter(Boolean);
+
+  const uniqueMemberNames = Array.from(
+    new Set(
+      allItems.flatMap((i) => {
+        try {
+          const members = JSON.parse(i.crew_members);
+          return Array.isArray(members) ? members.map((m) => m.name) : [];
+        } catch {
+          return [];
+        }
+      })
+    )
+  ).filter(Boolean);
+
+  const selectedProjectObj = projects.find((p) => p.name === form.project);
+  const availableFloors = selectedProjectObj?.floors || [];
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -301,13 +376,25 @@ export default function MasterItemForm({
 
             <div>
               <Label className="text-xs">Actividad *</Label>
-              <Input
+              <AutocompleteInput
                 value={form.activity}
                 onChange={(e) => updateFormField("activity", e.target.value)}
+                options={uniqueActivities}
                 placeholder="Ej: Artefactos, Luminarias..."
               />
             </div>
           </div>
+
+          {selectedProjectObj?.supervisor && (
+            <div>
+              <Label className="text-xs">Supervisor de obra</Label>
+              <Input
+                value={selectedProjectObj.supervisor}
+                readOnly
+                className="bg-muted/50 text-muted-foreground"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -321,10 +408,11 @@ export default function MasterItemForm({
 
             <div>
               <Label className="text-xs">Piso</Label>
-              <Input
-                value={form.floor}
-                onChange={(e) => updateFormField("floor", e.target.value)}
-                placeholder="Ej: Piso 1, Subterráneo..."
+              <MultiSelect
+                options={FLOOR_OPTIONS}
+                selected={form.floors}
+                onChange={(val) => updateFormField("floors", val)}
+                placeholder="Seleccionar pisos..."
               />
             </div>
           </div>
@@ -386,9 +474,10 @@ export default function MasterItemForm({
 
           <div>
             <Label className="text-xs">Nombre Cuadrilla</Label>
-            <Input
+            <AutocompleteInput
               value={form.crew_name}
               onChange={(e) => updateFormField("crew_name", e.target.value)}
+              options={uniqueCrewNames}
               placeholder="Ej: Cuadrilla Reyes"
             />
           </div>
@@ -420,11 +509,12 @@ export default function MasterItemForm({
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
               {crewMembers.map((member, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <Input
+                  <AutocompleteInput
                     value={member.name}
                     onChange={(e) =>
                       updateMember(index, "name", e.target.value)
                     }
+                    options={uniqueMemberNames}
                     placeholder="Nombre"
                     className="h-8 flex-1 text-xs"
                   />
