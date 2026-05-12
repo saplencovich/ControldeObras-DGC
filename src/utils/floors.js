@@ -7,7 +7,7 @@ export function getFloorList(floor) {
     .filter(Boolean);
 }
 
-function getFloorNumber(floor) {
+export function getFloorNumber(floor) {
   const match = String(floor || "").match(/-?\d+/);
   return match ? Number(match[0]) : null;
 }
@@ -31,4 +31,61 @@ export function getFloorOptions(items = [], defaults = DEFAULT_FLOORS) {
 export function itemHasFloor(itemFloor, selectedFloor) {
   if (!selectedFloor) return true;
   return getFloorList(itemFloor).includes(selectedFloor);
+}
+
+export function summarizeFloorList(floor) {
+  const floors = getFloorList(floor).sort(sortFloors);
+
+  if (floors.length === 0) {
+    return {
+      count: 0,
+      label: "Sin piso",
+      floors: [],
+    };
+  }
+
+  const numbered = floors
+    .map((value) => ({
+      value,
+      number: getFloorNumber(value),
+    }))
+    .filter((entry) => entry.number !== null);
+
+  const nonNumbered = floors.filter((value) => getFloorNumber(value) === null);
+
+  if (numbered.length !== floors.length) {
+    const preview = floors.slice(0, 3).join(", ");
+    const suffix = floors.length > 3 ? ` +${floors.length - 3}` : "";
+
+    return {
+      count: floors.length,
+      label: `${preview}${suffix}`,
+      floors,
+    };
+  }
+
+  const ranges = [];
+  let start = numbered[0].number;
+  let previous = numbered[0].number;
+
+  numbered.slice(1).forEach((entry) => {
+    if (entry.number === previous + 1) {
+      previous = entry.number;
+      return;
+    }
+
+    ranges.push(start === previous ? `${start}` : `${start}-${previous}`);
+    start = entry.number;
+    previous = entry.number;
+  });
+
+  ranges.push(start === previous ? `${start}` : `${start}-${previous}`);
+
+  const labelPrefix = ranges.length === 1 && !ranges[0].includes("-") ? "Piso" : "Pisos";
+
+  return {
+    count: floors.length,
+    label: `${labelPrefix} ${ranges.join(", ")}`,
+    floors: [...numbered.map((entry) => entry.value), ...nonNumbered],
+  };
 }
