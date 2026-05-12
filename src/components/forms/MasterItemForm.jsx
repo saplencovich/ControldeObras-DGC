@@ -385,6 +385,17 @@ export default function MasterItemForm({
             </div>
           </div>
 
+          {selectedProjectObj?.supervisor && (
+            <div>
+              <Label className="text-xs">Supervisor de obra</Label>
+              <Input
+                value={selectedProjectObj.supervisor}
+                readOnly
+                className="bg-muted/50 text-muted-foreground"
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Torre</Label>

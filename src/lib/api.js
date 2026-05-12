@@ -26,7 +26,7 @@ async function request(path, options = {}) {
 
     if (!response.ok) {
       throw new Error(
-        data?.message || data || `HTTP ${response.status}`
+        data?.error || data?.message || data || `HTTP ${response.status}`
       );
     }
 

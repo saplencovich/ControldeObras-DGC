@@ -27,6 +27,10 @@ const INITIAL_FORM = {
   end_date: "",
 };
 
+function normalizeProjectName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 export default function ProjectForm({ open, onClose, onSave }) {
   const { canCreateProjects } = usePermissions();
 
@@ -70,9 +74,17 @@ export default function ProjectForm({ open, onClose, onSave }) {
 
   const handleSave = async () => {
     const name = form.name.trim();
+    const duplicateProject = projects.find(
+      (project) => normalizeProjectName(project.name) === normalizeProjectName(name)
+    );
 
     if (!name) {
       setError("El nombre de la obra es obligatorio.");
+      return;
+    }
+
+    if (duplicateProject) {
+      setError(`Ya existe una obra con el nombre "${duplicateProject.name}".`);
       return;
     }
 
@@ -137,7 +149,13 @@ export default function ProjectForm({ open, onClose, onSave }) {
     );
   }
 
-  const isFormInvalid = !form.name.trim() || saving;
+  const duplicateProject = form.name.trim()
+    ? projects.find(
+        (project) =>
+          normalizeProjectName(project.name) === normalizeProjectName(form.name)
+      )
+    : null;
+  const isFormInvalid = !form.name.trim() || Boolean(duplicateProject) || saving;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -161,6 +179,11 @@ export default function ProjectForm({ open, onClose, onSave }) {
               options={projects.map((p) => p.name)}
               placeholder="Ej: Edificio Centro"
             />
+            {duplicateProject && (
+              <p className="mt-1 text-xs text-red-600">
+                Ya existe una obra con este nombre. Selecciona la existente o usa otro nombre.
+              </p>
+            )}
           </div>
 
           <div>

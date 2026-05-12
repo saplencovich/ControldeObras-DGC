@@ -420,6 +420,7 @@ export default function Dashboard() {
 
       <MasterPlanTable
         items={filteredItems}
+        projects={projects}
         dailyLogs={filteredLogs}
         onEdit={handleEdit}
         onDelete={handleDelete}

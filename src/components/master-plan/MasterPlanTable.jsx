@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
+  UserRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -111,6 +112,7 @@ function FloorsDisplay({ floor, compact = false }) {
 
 export default function MasterPlanTable({
   items = [],
+  projects = [],
   dailyLogs = [],
   onEdit,
   onDelete,
@@ -118,6 +120,13 @@ export default function MasterPlanTable({
   onDeleteLog,
 }) {
   const [expandedItems, setExpandedItems] = useState({});
+
+  const projectSupervisorByName = useMemo(() => {
+    return projects.reduce((acc, project) => {
+      if (project.name) acc[project.name] = project.supervisor || "";
+      return acc;
+    }, {});
+  }, [projects]);
 
   const logsByItemId = useMemo(() => {
     return dailyLogs.reduce((acc, log) => {
@@ -186,6 +195,10 @@ export default function MasterPlanTable({
                     <p className="text-[11px] text-muted-foreground">
                       {item.project} — {item.tower || '—'}
                     </p>
+                    <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <UserRound className="h-3 w-3" />
+                      {projectSupervisorByName[item.project] || "Sin supervisor"}
+                    </p>
                     <div className="mt-1">
                       <FloorsDisplay floor={item.floor} compact />
                     </div>
@@ -247,6 +260,7 @@ export default function MasterPlanTable({
               <TableRow className="bg-muted/50">
                 <TableHead className="w-8 text-xs" />
                 <TableHead className="text-xs">Proyecto</TableHead>
+                <TableHead className="text-xs">Supervisor</TableHead>
                 <TableHead className="text-xs">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
@@ -270,7 +284,7 @@ export default function MasterPlanTable({
               {items.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={16}
+                    colSpan={17}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
                     No hay ítems en el plan maestro. Crea uno nuevo para
@@ -314,6 +328,10 @@ export default function MasterPlanTable({
 
                       <TableCell className="font-medium">
                         {item.project || "—"}
+                      </TableCell>
+
+                      <TableCell className="text-muted-foreground">
+                        {projectSupervisorByName[item.project] || "—"}
                       </TableCell>
 
                       <TableCell>{item.tower || "—"}</TableCell>
@@ -440,7 +458,7 @@ export default function MasterPlanTable({
                           <TableCell className="p-1" />
 
                           <TableCell
-                            colSpan={4}
+                            colSpan={5}
                             className="pl-6 text-muted-foreground"
                           >
                             <span className="inline-flex items-center gap-1.5">

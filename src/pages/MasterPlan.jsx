@@ -170,6 +170,7 @@ export default function MasterPlan() {
 
       <MasterPlanTable
         items={filteredItems}
+        projects={projects}
         dailyLogs={dailyLogs}
         onEdit={(item) => {
           setEditItem(item);

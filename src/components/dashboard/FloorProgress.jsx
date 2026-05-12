@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { Building2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -170,6 +171,7 @@ export default function FloorProgress({ masterItems }) {
   const towers = [...new Set(masterItems.map((i) => i.tower).filter(Boolean))];
 
   const [selectedTower, setSelectedTower] = useState('__all__');
+  const [selectedFloorPage, setSelectedFloorPage] = useState('lower');
 
   const filtered =
     selectedTower === '__all__'
@@ -231,6 +233,19 @@ export default function FloorProgress({ masterItems }) {
 
   const floorsSorted = sortFloorsDesc(floors);
 
+  const lowerFloors = floorsSorted.filter((floor) => {
+    const floorNumber = getFloorNumber(floor.floor);
+    return floorNumber <= 15;
+  });
+  const upperFloors = floorsSorted.filter((floor) => getFloorNumber(floor.floor) >= 16);
+  const floorPages = [
+    { id: 'lower', label: 'Pisos 1-15', floors: lowerFloors },
+    { id: 'upper', label: 'Pisos 16+', floors: upperFloors },
+  ].filter((page) => page.floors.length > 0);
+  const activeFloorPage =
+    floorPages.find((page) => page.id === selectedFloorPage) || floorPages[0];
+  const visibleFloors = activeFloorPage?.floors || [];
+
   const allActivities = [
     ...new Set(filtered.map((i) => i.activity || 'General')),
   ];
@@ -270,9 +285,29 @@ export default function FloorProgress({ masterItems }) {
       </CardHeader>
 
       <CardContent>
+        {floorPages.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-1">
+            {floorPages.map((page) => (
+              <Button
+                key={page.id}
+                type="button"
+                variant={activeFloorPage?.id === page.id ? 'default' : 'ghost'}
+                size="sm"
+                className="h-8 gap-2 rounded text-xs"
+                onClick={() => setSelectedFloorPage(page.id)}
+              >
+                <span>{page.label}</span>
+                <span className="rounded bg-background/80 px-1.5 py-0.5 text-[10px] text-foreground">
+                  {page.floors.length}
+                </span>
+              </Button>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-6 items-start">
           <div className="hidden sm:flex flex-shrink-0 pt-2 sm:sticky sm:top-4 sm:self-start">
-            <BuildingVisual floors={floorsSorted} />
+            <BuildingVisual floors={visibleFloors} />
           </div>
 
           <div className="overflow-x-auto flex-1 min-w-0">
@@ -313,7 +348,7 @@ export default function FloorProgress({ masterItems }) {
               </TableHeader>
 
               <TableBody>
-                {floorsSorted.length === 0 && (
+                {visibleFloors.length === 0 && (
                   <TableRow>
                     <TableCell
                       colSpan={3 + allActivities.length}
@@ -324,7 +359,7 @@ export default function FloorProgress({ masterItems }) {
                   </TableRow>
                 )}
 
-                {floorsSorted.map((f) => {
+                {visibleFloors.map((f) => {
                   const status = getFloorStatusStyle(f.pct);
 
                   return (
