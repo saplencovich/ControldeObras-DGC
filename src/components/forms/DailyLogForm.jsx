@@ -30,7 +30,9 @@ import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 import SignaturePad from "./SignaturePad";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const SERVER_URL = (
+  import.meta.env.VITE_API_URL || "http://localhost:3001/api"
+).replace(/\/api\/?$/, "");
 
 const REQUIRE_PHOTO = false;
 const REQUIRE_SIGNATURE = false;
@@ -79,8 +81,30 @@ function getRemainingQty(masterItem) {
 
   return Math.max(
     Number(masterItem.planned_qty || 0) - Number(masterItem.executed_qty || 0),
-    0
+    0,
   );
+}
+
+function getPhotoSrc(photo) {
+  if (!photo) return "";
+
+  if (photo.url?.startsWith("http")) {
+    return photo.url;
+  }
+
+  if (photo.url?.startsWith("/uploads")) {
+    return `${SERVER_URL}${photo.url}`;
+  }
+
+  if (photo.file_url?.startsWith("http")) {
+    return photo.file_url;
+  }
+
+  if (photo.file_url?.startsWith("/uploads")) {
+    return `${SERVER_URL}${photo.file_url}`;
+  }
+
+  return photo.url || photo.file_url || "";
 }
 
 export default function DailyLogForm({
@@ -94,66 +118,86 @@ export default function DailyLogForm({
   const [workers, setWorkers] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [signatureImage, setSignatureImage] = useState(null);
   const [error, setError] = useState("");
 
   const { data: allLogs = [] } = useQuery({
-    queryKey: ['allDailyLogsForAutocomplete'],
-    queryFn: () => api.get('/daily-logs'),
+    queryKey: ["allDailyLogsForAutocomplete"],
+    queryFn: () => api.get("/daily-logs"),
     staleTime: 1000 * 60 * 5,
     enabled: open,
   });
 
   const { data: allWorkers = [] } = useQuery({
-    queryKey: ['allWorkersForAutocomplete'],
-    queryFn: () => api.get('/workers'),
+    queryKey: ["allWorkersForAutocomplete"],
+    queryFn: () => api.get("/workers"),
     staleTime: 1000 * 60 * 5,
     enabled: open,
   });
 
-  const uniqueSupervisors = Array.from(new Set(allLogs.map(log => log.supervisor).filter(Boolean))).sort();
-  const uniqueCapatazNames = Array.from(new Set(allLogs.map(log => log.capataz_name).filter(Boolean))).sort();
-  
-  const logWorkers = allLogs.flatMap(log => log.crew_workers || []);
+  const uniqueSupervisors = Array.from(
+    new Set(allLogs.map((log) => log.supervisor).filter(Boolean)),
+  ).sort();
+
+  const uniqueCapatazNames = Array.from(
+    new Set(allLogs.map((log) => log.capataz_name).filter(Boolean)),
+  ).sort();
+
+  const logWorkers = allLogs.flatMap((log) => log.crew_workers || []);
   const allWorkerData = [...allWorkers, ...logWorkers];
-  
-  const uniqueWorkerNames = Array.from(new Set(allWorkerData.map(w => w.name).filter(Boolean))).sort();
-  const uniqueWorkerRoles = Array.from(new Set(allWorkerData.map(w => w.role).filter(Boolean))).sort();
+
+  const uniqueWorkerNames = Array.from(
+    new Set(allWorkerData.map((worker) => worker.name).filter(Boolean)),
+  ).sort();
+
+  const uniqueWorkerRoles = Array.from(
+    new Set(allWorkerData.map((worker) => worker.role).filter(Boolean)),
+  ).sort();
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
-
-    setForm({
-      ...getInitialForm(userName),
-      crew_name: masterItem?.crew_name || "",
+  if (!open) {
+    // Limpiar archivos huérfanos si el form se cierra sin guardar
+    photos.forEach((photo) => {
+      if (photo.is_uploaded && photo.filename) {
+        api.delete(`/upload/${photo.filename}`).catch(() => {});
+      }
     });
+    return;
+  }
 
-    if (
-      Array.isArray(masterItem?.crew_members) &&
-      masterItem.crew_members.length > 0
-    ) {
-      setWorkers(
-        masterItem.crew_members.map((member) => ({
-          name: member.name || "",
-          role: member.role || "",
-          hours: "",
-          executed: "",
-        }))
-      );
-    } else {
-      setWorkers([]);
-    }
+  setForm({
+    ...getInitialForm(userName),
+    crew_name: masterItem?.crew_name || "",
+  });
 
-    setPhotos([]);
-    setSaving(false);
-    setShowSignaturePad(false);
-    setSignatureImage(null);
-    setError("");
-  }, [open, masterItem, userName]);
+  if (
+    Array.isArray(masterItem?.crew_members) &&
+    masterItem.crew_members.length > 0
+  ) {
+    setWorkers(
+      masterItem.crew_members.map((member) => ({
+        name: member.name || "",
+        role: member.role || "",
+        hours: "",
+        executed: "",
+      })),
+    );
+  } else {
+    setWorkers([]);
+  }
+
+  setPhotos([]);
+  setSaving(false);
+  setUploadingPhotos(false);
+  setShowSignaturePad(false);
+  setSignatureImage(null);
+  setError("");
+}, [open, masterItem, userName]);
 
   const updateFormField = (field, value) => {
     setForm((prev) => ({
@@ -175,8 +219,8 @@ export default function DailyLogForm({
   const updateWorker = (index, field, value) => {
     setWorkers((prev) =>
       prev.map((worker, idx) =>
-        idx === index ? { ...worker, [field]: value } : worker
-      )
+        idx === index ? { ...worker, [field]: value } : worker,
+      ),
     );
   };
 
@@ -184,68 +228,56 @@ export default function DailyLogForm({
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
 
-    const localPhotos = files.map((file) => ({
-      url: URL.createObjectURL(file),
-      description: "",
-      file_name: file.name,
-      is_local_preview: true,
-    }));
-
     try {
+      setUploadingPhotos(true);
+      setError("");
+
       for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`${API_BASE_URL}/upload`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || `HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        const fileUrl = data?.file_url || data?.url || data?.data?.file_url || data?.data?.url;
-
-        if (!fileUrl) {
-          throw new Error('El servidor no devolvio una URL valida para la foto.');
-        }
+        const uploadedPhoto = await api.uploadPhoto(file);
 
         setPhotos((prev) => [
           ...prev,
           {
-            url: fileUrl,
-            description: '',
+            url: uploadedPhoto.file_url,
+            file_url: uploadedPhoto.file_url,
+            description: "",
+            file_name: uploadedPhoto.original_name || file.name,
+            filename: uploadedPhoto.filename,
+            mimetype: uploadedPhoto.mimetype,
+            size: uploadedPhoto.size,
+            is_uploaded: true,
           },
         ]);
       }
     } catch (error) {
-      console.error('Error al subir foto:', error);
-      alert('Error al subir foto.');
+      console.error("Error al subir foto:", error);
+      setError(error.message || "Error al subir foto.");
     } finally {
-      event.target.value = '';
+      setUploadingPhotos(false);
+      event.target.value = "";
     }
   };
 
-  const removePhoto = (index) => {
-    setPhotos((prev) => {
-      const photo = prev[index];
+  const removePhoto = async (index) => {
+    const photo = photos[index];
 
-      if (photo?.is_local_preview && photo?.url) {
-        URL.revokeObjectURL(photo.url);
+    // Si ya fue subida al servidor, borrar el archivo físico
+    if (photo.is_uploaded && photo.filename) {
+      try {
+        await api.delete(`/upload/${photo.filename}`);
+      } catch (err) {
+        console.warn("No se pudo eliminar archivo temporal:", err.message);
       }
+    }
 
-      return prev.filter((_, idx) => idx !== index);
-    });
+    setPhotos((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const updatePhotoDescription = (index, value) => {
     setPhotos((prev) =>
       prev.map((photo, idx) =>
-        idx === index ? { ...photo, description: value } : photo
-      )
+        idx === index ? { ...photo, description: value } : photo,
+      ),
     );
   };
 
@@ -253,7 +285,6 @@ export default function DailyLogForm({
     if (!masterItem || !form.executed_today) return null;
 
     const planned = Number(masterItem.planned_qty || 0);
-    const executed = Number(masterItem.executed_qty || 0);
     const remaining = getRemainingQty(masterItem);
 
     if (remaining <= 0) return null;
@@ -264,13 +295,13 @@ export default function DailyLogForm({
       const totalDays =
         differenceInCalendarDays(
           new Date(masterItem.end_date),
-          new Date(masterItem.start_date)
+          new Date(masterItem.start_date),
         ) + 1;
 
       const daysPassed =
         differenceInCalendarDays(
           new Date(form.date),
-          new Date(masterItem.start_date)
+          new Date(masterItem.start_date),
         ) + 1;
 
       const daysLeft = Math.max(totalDays - daysPassed + 1, 1);
@@ -303,6 +334,10 @@ export default function DailyLogForm({
         throw new Error("Debe ingresar la cantidad ejecutada hoy.");
       }
 
+      if (uploadingPhotos) {
+        throw new Error("Espera a que terminen de subir las fotos.");
+      }
+
       const remainingQty = getRemainingQty(masterItem);
       const executedToday = Number(form.executed_today);
 
@@ -312,7 +347,9 @@ export default function DailyLogForm({
 
       if (executedToday > remainingQty) {
         throw new Error(
-          `La cantidad ejecutada hoy no puede superar el pendiente (${remainingQty} ${masterItem.unit || "und"}).`
+          `La cantidad ejecutada hoy no puede superar el pendiente (${remainingQty} ${
+            masterItem.unit || "und"
+          }).`,
         );
       }
 
@@ -347,7 +384,14 @@ export default function DailyLogForm({
         tower: masterItem.tower,
         floor: masterItem.floor,
         activity: masterItem.activity,
-        photos,
+        photos: photos.map((photo) => ({
+          file_url: photo.file_url || photo.url || "",
+          url: photo.file_url || photo.url || "",
+          description: photo.description || "",
+          label: "reporte_diario",
+          date: form.date,
+          file_name: photo.file_name || "",
+        })),
       });
 
       onClose();
@@ -368,6 +412,7 @@ export default function DailyLogForm({
     remainingQty <= 0 ||
     executedTodayQty > remainingQty ||
     saving ||
+    uploadingPhotos ||
     (REQUIRE_PHOTO && photos.length === 0) ||
     (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) ||
     (REQUIRE_SIGNATURE && !signatureImage);
@@ -440,6 +485,7 @@ export default function DailyLogForm({
                   updateFormField("executed_today", e.target.value)
                 }
               />
+
               {masterItem && (
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   Máximo permitido: {remainingQty} {masterItem.unit || "und"}.
@@ -505,10 +551,7 @@ export default function DailyLogForm({
                 Ejecutado acum.: <b>{masterItem.executed_qty || 0}</b>
               </span>
               <span>
-                Pendiente:{" "}
-                <b>
-                  {remainingQty}
-                </b>
+                Pendiente: <b>{remainingQty}</b>
               </span>
             </div>
           )}
@@ -554,6 +597,7 @@ export default function DailyLogForm({
                     }
                     options={uniqueWorkerNames}
                   />
+
                   <AutocompleteInput
                     placeholder="Cargo"
                     className="h-8 text-xs"
@@ -563,6 +607,7 @@ export default function DailyLogForm({
                     }
                     options={uniqueWorkerRoles}
                   />
+
                   <Input
                     type="number"
                     placeholder="Horas"
@@ -572,6 +617,7 @@ export default function DailyLogForm({
                       updateWorker(index, "hours", e.target.value)
                     }
                   />
+
                   <Input
                     type="number"
                     placeholder="Ejecutado"
@@ -581,6 +627,7 @@ export default function DailyLogForm({
                       updateWorker(index, "executed", e.target.value)
                     }
                   />
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -594,7 +641,7 @@ export default function DailyLogForm({
               ))}
 
               {workers.length > 0 && (
-                <p className="text-[10px] text-muted-foreground hidden sm:block">
+                <p className="hidden text-[10px] text-muted-foreground sm:block">
                   Columnas: Nombre / Cargo / Horas / Ejecutado
                 </p>
               )}
@@ -628,9 +675,7 @@ export default function DailyLogForm({
             <Label className="text-xs">Observaciones</Label>
             <Textarea
               value={form.observations}
-              onChange={(e) =>
-                updateFormField("observations", e.target.value)
-              }
+              onChange={(e) => updateFormField("observations", e.target.value)}
               className="h-16"
             />
           </div>
@@ -654,19 +699,22 @@ export default function DailyLogForm({
                   size="sm"
                   className="h-7 gap-1 text-xs"
                   onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploadingPhotos}
                 >
                   <Camera className="h-3 w-3" />
                   Cámara
                 </Button>
+
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-7 gap-1 text-xs"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhotos}
                 >
                   <Plus className="h-3 w-3" />
-                  Galería
+                  {uploadingPhotos ? "Subiendo..." : "Galería"}
                 </Button>
               </div>
 
@@ -678,6 +726,7 @@ export default function DailyLogForm({
                 className="hidden"
                 onChange={handlePhotoUpload}
               />
+
               <input
                 ref={cameraInputRef}
                 type="file"
@@ -701,8 +750,8 @@ export default function DailyLogForm({
                   className="relative overflow-hidden rounded-lg border border-border"
                 >
                   <img
-                    src={photo.url}
-                    alt="foto"
+                    src={getPhotoSrc(photo)}
+                    alt={photo.description || "foto"}
                     className="h-28 w-full object-cover"
                   />
 
@@ -810,7 +859,11 @@ export default function DailyLogForm({
           </Button>
 
           <Button onClick={handleSave} disabled={isSaveDisabled}>
-            {saving ? "Guardando..." : "Guardar Reporte"}
+            {saving
+              ? "Guardando..."
+              : uploadingPhotos
+                ? "Subiendo fotos..."
+                : "Guardar Reporte"}
           </Button>
         </DialogFooter>
       </DialogContent>

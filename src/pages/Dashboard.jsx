@@ -17,7 +17,6 @@ import DailyLogForm from "../components/forms/DailyLogForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { itemHasFloor } from "@/utils/floors";
 
 function DashboardSkeleton() {
   return (
@@ -155,7 +154,7 @@ export default function Dashboard() {
         throw new Error("No se encontró el ítem asociado al reporte diario");
       }
 
-      return api.post('/daily-logs', {
+      return api.post("/daily-logs", {
         ...data,
         master_item_id: masterItemId,
       });
@@ -169,9 +168,10 @@ export default function Dashboard() {
   const filteredItems = filteredMasterItems.filter((item) => {
     if (filters.project && item.project !== filters.project) return false;
     if (filters.tower && item.tower !== filters.tower) return false;
-    if (!itemHasFloor(item.floor, filters.floor)) return false;
+    if (filters.floor && item.floor !== filters.floor) return false;
     if (filters.activity && item.activity !== filters.activity) return false;
-    if (filters.release && item.release_status !== filters.release) return false;
+    if (filters.release && item.release_status !== filters.release)
+      return false;
 
     if (filters.search) {
       const search = filters.search.toLowerCase();
@@ -193,7 +193,7 @@ export default function Dashboard() {
 
   const filteredItemIds = new Set(filteredItems.map((i) => Number(i.id)));
   const filteredLogs = dailyLogs.filter((log) =>
-    filteredItemIds.has(Number(log.master_item_id))
+    filteredItemIds.has(Number(log.master_item_id)),
   );
 
   const handleEdit = (item) => {
@@ -206,7 +206,7 @@ export default function Dashboard() {
     entityName,
     entityId,
     description,
-    previousData = null
+    previousData = null,
   ) => {
     try {
       await api.post("/audit-logs", {
@@ -235,7 +235,7 @@ export default function Dashboard() {
           `Editó ítem "${data.activity || editItem.activity}" (${
             data.project || editItem.project
           })`,
-          editItem
+          editItem,
         );
       } else {
         const newItem = await createItem.mutateAsync(data);
@@ -244,7 +244,7 @@ export default function Dashboard() {
           "crear",
           "MasterItem",
           newItem?.id || "nuevo",
-          `Creó ítem "${data.activity}" (${data.project})`
+          `Creó ítem "${data.activity}" (${data.project})`,
         );
       }
 
@@ -270,7 +270,7 @@ export default function Dashboard() {
 
   const deletePhotosByLogId = async (logId) => {
     const relatedPhotos = sitePhotos.filter(
-      (photo) => photo.daily_log_id === logId
+      (photo) => photo.daily_log_id === logId,
     );
 
     for (const photo of relatedPhotos) {
@@ -280,7 +280,7 @@ export default function Dashboard() {
 
   const deleteDirectPhotosByItemId = async (itemId) => {
     const directPhotos = sitePhotos.filter(
-      (photo) => photo.master_item_id === itemId && !photo.daily_log_id
+      (photo) => photo.master_item_id === itemId && !photo.daily_log_id,
     );
 
     for (const photo of directPhotos) {
@@ -290,14 +290,14 @@ export default function Dashboard() {
 
   const handleDelete = async (item) => {
     const confirmed = window.confirm(
-      `¿Eliminar ítem "${item.activity}" de ${item.project}?\nEsta acción también eliminará sus reportes diarios y fotos.`
+      `¿Eliminar ítem "${item.activity}" de ${item.project}?\nEsta acción también eliminará sus reportes diarios y fotos.`,
     );
 
     if (!confirmed) return;
 
     try {
       const relatedLogs = dailyLogs.filter(
-        (log) => Number(log.master_item_id) === Number(item.id)
+        (log) => Number(log.master_item_id) === Number(item.id),
       );
 
       for (const log of relatedLogs) {
@@ -315,7 +315,7 @@ export default function Dashboard() {
         `Eliminó ítem "${item.activity}" (${item.project} ${item.tower || ""} ${
           item.floor || ""
         })`,
-        item
+        item,
       );
 
       await queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
@@ -335,7 +335,7 @@ export default function Dashboard() {
           ...item,
           executed_qty: Math.max(
             Number(item.executed_qty || 0) - Number(log.executed_today || 0),
-            0
+            0,
           ),
         });
       }
@@ -350,7 +350,7 @@ export default function Dashboard() {
         `Eliminó reporte del ${log.date} (${item?.activity || ""} - ${
           item?.project || ""
         })`,
-        log
+        log,
       );
 
       await queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
@@ -409,7 +409,6 @@ export default function Dashboard() {
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
-        filterOptionItems={filteredMasterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
         onNewProject={() => setShowProjectForm(true)}
@@ -465,12 +464,32 @@ export default function Dashboard() {
           setShowDailyLog(false);
           setDailyLogItem(null);
         }}
-        onSave={(data) =>
-          createLog.mutateAsync(data).then((log) => {
-            queryClient.invalidateQueries({ queryKey: ["sitePhotos"] });
-            return log;
-          })
-        }
+        onSave={async (data) => {
+          const log = await createLog.mutateAsync(data);
+
+          // Guardar fotos en site-photos
+          if (Array.isArray(data.photos) && data.photos.length > 0) {
+            for (const photo of data.photos) {
+              await api.post("/site-photos", {
+                daily_log_id: log.id,
+                master_item_id: data.master_item_id || dailyLogItem?.id,
+                file_url: photo.file_url || photo.url || "",
+                description: photo.description || "",
+                label: photo.label || "reporte_diario",
+                date:
+                  photo.date ||
+                  data.date ||
+                  new Date().toISOString().split("T")[0],
+              });
+            }
+          }
+
+          // Invalidar con la key correcta que usa ItemDetail
+          queryClient.invalidateQueries({ queryKey: ["sitePhotos"] });
+          queryClient.invalidateQueries({ queryKey: ["photos"] }); // invalida todas las variantes
+
+          return log;
+        }}
         masterItem={dailyLogItem}
         userName={user?.full_name}
       />

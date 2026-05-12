@@ -77,18 +77,35 @@ export default function ItemDetail() {
 
 
   const handleSaveLog = async (data) => {
-    try {
-      const newLog = await api.post('/daily-logs', data);
+  try {
+    const newLog = await api.post("/daily-logs", data);
 
-      await queryClient.invalidateQueries({ queryKey: ['dailyLogs', itemId] });
-      await queryClient.invalidateQueries({ queryKey: ['masterItems'] });
-
-      return newLog;
-    } catch (error) {
-      console.error('Error al guardar reporte diario:', error);
-      throw error;
+    if (Array.isArray(data.photos) && data.photos.length > 0) {
+      for (const photo of data.photos) {
+        await api.post("/site-photos", {
+          daily_log_id: newLog.id,
+          master_item_id: data.master_item_id || itemId,
+          file_url: photo.file_url || photo.url || "",
+          description: photo.description || "",
+          label: photo.label || "reporte_diario",
+          date:
+            photo.date ||
+            data.date ||
+            new Date().toISOString().split("T")[0],
+        });
+      }
     }
-  };
+
+    await queryClient.invalidateQueries({ queryKey: ["dailyLogs", itemId] });
+    await queryClient.invalidateQueries({ queryKey: ["masterItems"] });
+    await queryClient.invalidateQueries({ queryKey: ["photos", itemId] });
+
+    return newLog;
+  } catch (error) {
+    console.error("Error al guardar reporte diario:", error);
+    throw error;
+  }
+};
 
   const handleCloseLogForm = () => {
     setShowLogForm(false);
@@ -154,8 +171,6 @@ export default function ItemDetail() {
     );
   }
 
-  // Filtro defensivo: algunos endpoints pueden devolver todos los registros.
-  // Asegura que esta vista solo muestre datos del ítem abierto.
   const scopedLogs = logs.filter(
     (log) => String(log.master_item_id) === String(itemId)
   );
