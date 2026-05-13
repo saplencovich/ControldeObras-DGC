@@ -189,27 +189,6 @@ export default function PhotoGallery({
               <Camera className="h-4 w-4 text-accent" />
               Registro Fotográfico
             </CardTitle>
-
-            <div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 gap-1.5 text-xs"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus className="h-3 w-3" />
-                {uploading ? "Subiendo..." : "Agregar Foto"}
-              </Button>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleUpload}
-              />
-            </div>
           </div>
         </CardHeader>
 
