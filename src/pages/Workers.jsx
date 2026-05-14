@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -28,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Plus, Trash2, FileSpreadsheet } from 'lucide-react';
+import { Users, Plus, Trash2, FileSpreadsheet, Upload, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { api } from '@/lib/api';
@@ -36,15 +37,17 @@ import { api } from '@/lib/api';
 export default function Workers() {
   const queryClient = useQueryClient();
   const { hasAccessToProject, userRole } = usePermissions();
+  const fileInputRef = useRef(null);
 
   const [showForm, setShowForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState('all');
-  const [form, setForm] = useState({
-    project: '',
-    name: '',
-    role: '',
-    rut: '',
-  });
+  const [form, setForm] = useState({ project: '', name: '', role: '' });
+
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [importRows, setImportRows] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importProject, setImportProject] = useState(''); // ← obra seleccionada en modal
 
   const { data: projectWorkers = [], isLoading } = useQuery({
     queryKey: ['projectWorkers'],
@@ -71,7 +74,7 @@ export default function Workers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
       setShowForm(false);
-      setForm({ project: '', name: '', role: '', rut: '' });
+      setForm({ project: '', name: '', role: '' });
     },
   });
 
@@ -81,12 +84,6 @@ export default function Workers() {
       queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
     },
   });
-
-  const handleFileImport = async () => {
-    alert(
-      'La importación Excel/CSV quedó desactivada temporalmente mientras se elimina Base44. Después la conectamos a tu backend local.'
-    );
-  };
 
   const workerProductivity = {};
   dailyLogs.forEach((log) => {
@@ -101,13 +98,12 @@ export default function Workers() {
     });
   });
 
+  const canSeeWorker = (w) => userRole === 'admin' || hasAccessToProject(w.project);
+
   const filteredWorkers =
     selectedProject === 'all'
-      ? projectWorkers.filter((w) => hasAccessToProject(w.project))
-      : projectWorkers.filter(
-          (w) =>
-            w.project === selectedProject && hasAccessToProject(w.project)
-        );
+      ? projectWorkers.filter(canSeeWorker)
+      : projectWorkers.filter((w) => w.project === selectedProject && canSeeWorker(w));
 
   const projectNames = [
     ...new Set(projectWorkers.map((w) => w.project).filter(Boolean)),
@@ -115,6 +111,81 @@ export default function Workers() {
   const allProjects = [
     ...new Set([...filteredProjects.map((p) => p.name), ...projectNames]),
   ];
+
+  // Abre el picker siempre, sin requerir obra previa
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        const parsed = rows
+          .map((row) => ({
+            name: String(row['Nombre'] || row['nombre'] || row['name'] || row['NOMBRE'] || '').trim(),
+            role: String(row['Cargo'] || row['cargo'] || row['role'] || row['CARGO'] || '').trim(),
+          }))
+          .filter((r) => r.name);
+
+        if (parsed.length === 0) {
+          setImportError('No se encontraron filas válidas. Asegúrate de que el archivo tenga columnas "Nombre" y "Cargo".');
+          setImportRows([]);
+        } else {
+          setImportError('');
+          setImportRows(parsed);
+        }
+
+        // Pre-cargar obra si ya hay una seleccionada en el filtro
+        setImportProject(selectedProject !== 'all' ? selectedProject : '');
+        setShowImportPreview(true);
+      } catch (err) {
+        setImportError('Error al leer el archivo: ' + err.message);
+        setImportRows([]);
+        setImportProject('');
+        setShowImportPreview(true);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleConfirmImport = async () => {
+    setImporting(true);
+    try {
+      for (const row of importRows) {
+        await api.post('/project-workers', {
+          project: importProject, // ← usa la obra del modal
+          name: row.name,
+          role: row.role,
+          active: true,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
+      setShowImportPreview(false);
+      setImportRows([]);
+      setImportProject('');
+    } catch (err) {
+      setImportError('Error al importar: ' + (err.message || 'Error desconocido'));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleCloseImport = () => {
+    setShowImportPreview(false);
+    setImportRows([]);
+    setImportError('');
+    setImportProject('');
+  };
 
   if (isLoading) {
     return (
@@ -141,9 +212,7 @@ export default function Workers() {
             <SelectContent>
               <SelectItem value="all">Todas las obras</SelectItem>
               {allProjects.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
+                <SelectItem key={p} value={p}>{p}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -152,11 +221,19 @@ export default function Workers() {
             variant="outline"
             size="sm"
             className="h-8 text-xs gap-1.5"
-            onClick={handleFileImport}
+            onClick={handleImportClick}
           >
             <FileSpreadsheet className="w-3 h-3" />
             Importar Excel/CSV
           </Button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleFileChange}
+          />
 
           <Button
             size="sm"
@@ -166,7 +243,6 @@ export default function Workers() {
                 project: selectedProject !== 'all' ? selectedProject : '',
                 name: '',
                 role: '',
-                rut: '',
               });
               setShowForm(true);
             }}
@@ -177,22 +253,10 @@ export default function Workers() {
         </div>
       </div>
 
-      <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 -mt-2">
-        <FileSpreadsheet className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-        <p className="text-xs text-blue-700">
-          La importación masiva quedó temporalmente desactivada mientras se elimina Base44.
-          Por ahora puedes registrar personal manualmente. Luego conectamos esta opción a tu backend local.
-        </p>
-      </div>
-
       <Tabs defaultValue="roster">
         <TabsList className="h-8">
-          <TabsTrigger value="roster" className="text-xs">
-            Padrón de Personal
-          </TabsTrigger>
-          <TabsTrigger value="productivity" className="text-xs">
-            Productividad Individual
-          </TabsTrigger>
+          <TabsTrigger value="roster" className="text-xs">Padrón de Personal</TabsTrigger>
+          <TabsTrigger value="productivity" className="text-xs">Productividad Individual</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roster">
@@ -214,7 +278,6 @@ export default function Workers() {
                     <TableRow className="bg-muted/50">
                       <TableHead className="text-xs">Nombre completo</TableHead>
                       <TableHead className="text-xs">Cargo</TableHead>
-                      <TableHead className="text-xs">RUT</TableHead>
                       <TableHead className="text-xs">Obra</TableHead>
                       <TableHead className="text-xs text-right">Acciones</TableHead>
                     </TableRow>
@@ -223,11 +286,8 @@ export default function Workers() {
                   <TableBody>
                     {filteredWorkers.length === 0 && (
                       <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-sm text-muted-foreground py-12"
-                        >
-                          Sin personal registrado. Agrega personal manualmente.
+                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-12">
+                          Sin personal registrado.
                         </TableCell>
                       </TableRow>
                     )}
@@ -236,13 +296,8 @@ export default function Workers() {
                       <TableRow key={w.id} className="hover:bg-muted/30 text-xs">
                         <TableCell className="font-medium">{w.name}</TableCell>
                         <TableCell>{w.role || '—'}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {w.rut || '—'}
-                        </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {w.project}
-                          </Badge>
+                          <Badge variant="outline" className="text-xs">{w.project}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -283,19 +338,14 @@ export default function Workers() {
                       <TableHead className="text-xs text-right">Jornadas</TableHead>
                       <TableHead className="text-xs text-right">Horas Total</TableHead>
                       <TableHead className="text-xs text-right">Ejecutado Total</TableHead>
-                      <TableHead className="text-xs text-right">
-                        Rendimiento (ejec/h)
-                      </TableHead>
+                      <TableHead className="text-xs text-right">Rendimiento (ejec/h)</TableHead>
                     </TableRow>
                   </TableHeader>
 
                   <TableBody>
                     {Object.keys(workerProductivity).length === 0 && (
                       <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-sm text-muted-foreground py-12"
-                        >
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">
                           Sin datos. Registra personal en los reportes diarios para ver productividad.
                         </TableCell>
                       </TableRow>
@@ -304,20 +354,14 @@ export default function Workers() {
                     {Object.entries(workerProductivity)
                       .sort((a, b) => b[1].hours - a[1].hours)
                       .map(([name, p]) => {
-                        const rend =
-                          p.hours > 0 ? (p.executed / p.hours).toFixed(2) : '—';
-
+                        const rend = p.hours > 0 ? (p.executed / p.hours).toFixed(2) : '—';
                         return (
                           <TableRow key={name} className="hover:bg-muted/30 text-xs">
                             <TableCell className="font-medium">{name}</TableCell>
                             <TableCell className="text-right">{p.days}</TableCell>
                             <TableCell className="text-right">{p.hours}h</TableCell>
-                            <TableCell className="text-right font-mono font-medium">
-                              {p.executed}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {rend}
-                            </TableCell>
+                            <TableCell className="text-right font-mono font-medium">{p.executed}</TableCell>
+                            <TableCell className="text-right font-mono">{rend}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -329,6 +373,7 @@ export default function Workers() {
         </TabsContent>
       </Tabs>
 
+      {/* Modal agregar persona manualmente */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -338,18 +383,13 @@ export default function Workers() {
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Obra *</Label>
-              <Select
-                value={form.project}
-                onValueChange={(v) => setForm({ ...form, project: v })}
-              >
+              <Select value={form.project} onValueChange={(v) => setForm({ ...form, project: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar obra" />
                 </SelectTrigger>
                 <SelectContent>
                   {allProjects.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -364,37 +404,98 @@ export default function Workers() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Cargo</Label>
-                <Input
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  placeholder="Ej: Electricista"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs">RUT (opcional)</Label>
-                <Input
-                  value={form.rut}
-                  onChange={(e) => setForm({ ...form, rut: e.target.value })}
-                  placeholder="12.345.678-9"
-                />
-              </div>
+            <div>
+              <Label className="text-xs">Cargo</Label>
+              <Input
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                placeholder="Ej: Electricista"
+              />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button
               onClick={() => createWorker.mutate({ ...form, active: true })}
               disabled={!form.project || !form.name || createWorker.isPending}
             >
               {createWorker.isPending ? 'Guardando...' : 'Guardar'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal previsualización importación */}
+      <Dialog open={showImportPreview} onOpenChange={handleCloseImport}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-4 h-4" />
+              Importar personal
+            </DialogTitle>
+          </DialogHeader>
+
+          {importError ? (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-3">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{importError}</p>
+            </div>
+          ) : (
+            <>
+              {/* Selector de obra dentro del modal */}
+              <div>
+                <Label className="text-xs">Obra destino *</Label>
+                <Select value={importProject} onValueChange={setImportProject}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar obra" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allProjects.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Se importarán <strong>{importRows.length} personas</strong>.
+                {importProject && <> Obra destino: <strong>{importProject}</strong>.</>}
+              </p>
+
+              <div className="max-h-64 overflow-y-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="text-xs">Nombre</TableHead>
+                      <TableHead className="text-xs">Cargo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {importRows.map((row, i) => (
+                      <TableRow key={i} className="text-xs">
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell>{row.role || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCloseImport} disabled={importing}>
+              Cancelar
+            </Button>
+            {!importError && (
+              <Button
+                onClick={handleConfirmImport}
+                disabled={importing || !importProject}
+              >
+                {importing ? 'Importando...' : `Importar ${importRows.length} personas`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

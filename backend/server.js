@@ -10,6 +10,7 @@ const dailyLogsRoutes = require("./routes/dailyLogs.routes");
 const sitePhotosRoutes = require("./routes/sitePhotos.routes");
 const auditLogsRoutes = require("./routes/auditLogs.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const projectWorkersRoutes = require("./routes/projectWorkers.routes");
 
 const app = express();
 const PORT = 3001;
@@ -35,6 +36,7 @@ app.use("/api/daily-logs", dailyLogsRoutes);
 app.use("/api/site-photos", sitePhotosRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/project-workers", projectWorkersRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

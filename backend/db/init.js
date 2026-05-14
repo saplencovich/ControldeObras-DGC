@@ -2,7 +2,7 @@ const db = require("./connection");
 
 function initDatabase() {
   db.serialize(() => {
-    db.run("PRAGMA firegn_key = ON");
+    db.run("PRAGMA foreign_keys = ON");
 
     db.run(`
       CREATE TABLE IF NOT EXISTS projects (
@@ -92,6 +92,17 @@ function initDatabase() {
         user_email TEXT DEFAULT '',
         description TEXT DEFAULT '',
         previous_data TEXT DEFAULT '',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS project_workers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT DEFAULT '',
+        active INTEGER DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
