@@ -1,18 +1,10 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
+import { useAuth } from '@/lib/AuthContext';
 
 const PermissionsContext = createContext(null);
 
-const MOCK_USER = {
-  id: 1,
-  full_name: 'Admin',
-  email: 'admin@test.com',
-  role: 'admin',
-  allowed_projects: [],
-};
-
 export function PermissionsProvider({ children }) {
-  const [currentUser] = useState(MOCK_USER);
-  const [isLoading] = useState(false);
+  const { user: currentUser, isLoadingAuth } = useAuth();
 
   const value = useMemo(() => {
     const userRole = currentUser?.role || 'viewer';
@@ -31,7 +23,7 @@ export function PermissionsProvider({ children }) {
       currentUser,
       userRole,
       allowedProjects,
-      isLoading,
+      isLoading: isLoadingAuth,
       hasAccessToProject,
       canEditUsers: isAdmin,
       canCreateProjects: isAdmin || isSupervisor,
@@ -40,7 +32,7 @@ export function PermissionsProvider({ children }) {
       isSupervisor,
       isViewer,
     };
-  }, [currentUser, isLoading]);
+  }, [currentUser, isLoadingAuth]);
 
   return (
     <PermissionsContext.Provider value={value}>

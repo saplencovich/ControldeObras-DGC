@@ -3,13 +3,13 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { usePermissions } from '@/lib/PermissionsContext';
 import {
-  LayoutDashboard, ClipboardList, Users, LogOut, Zap, Shield,
+  LayoutDashboard, ClipboardList, Users, LogOut, Shield,
   Menu, X, ChevronRight, AlertTriangle, TrendingUp } from
 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function AppLayout() {
-  const { user } = useAuth();
+  const { logout, user } = useAuth();
   const { isAdmin } = usePermissions();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,7 +57,7 @@ export default function AppLayout() {
               variant="ghost"
               size="icon"
               className="text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground"
-              onClick={() => base44.auth.logout()}>
+              onClick={logout}>
               
               <LogOut className="w-4 h-4" />
             </Button>
