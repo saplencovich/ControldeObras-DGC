@@ -12,16 +12,15 @@ import {
   Search,
   Plus,
   Download,
-  Upload,
   RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
 import { exportReportExcel } from '@/utils/exportExcel';
 import { exportReportPDF } from '@/utils/exportPDF';
 import { usePermissions } from '@/lib/PermissionsContext';
+import { getFloorOptions } from '@/utils/floors';
 
 const TOWERS = ['Torre A', 'Torre B', 'Torre C'];
-const FLOORS = ['Piso 1', 'Piso 2', 'Piso 3', 'Piso 4', 'Piso 5'];
 const ACTIVITIES = ['Artefactos', 'Luminarias', 'Canalización', 'Cableado', 'Tableros'];
 
 const RELEASE_STATUSES = [
@@ -35,6 +34,7 @@ export default function FilterBar({
   setFilters,
   projects,
   masterItems = [],
+  filterOptionItems = masterItems,
   dailyLogs = [],
   sitePhotos = [],
   onNewProject,
@@ -46,9 +46,7 @@ export default function FilterBar({
   const towerOptions = [
     ...new Set([...TOWERS, ...masterItems.map((item) => item.tower).filter(Boolean)]),
   ];
-  const floorOptions = [
-    ...new Set([...FLOORS, ...masterItems.map((item) => item.floor).filter(Boolean)]),
-  ];
+  const floorOptions = getFloorOptions(filterOptionItems);
   const activityOptions = [
     ...new Set([...ACTIVITIES, ...masterItems.map((item) => item.activity).filter(Boolean)]),
   ];
@@ -207,14 +205,6 @@ export default function FilterBar({
           Exportar Excel
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-        >
-          <Upload className="h-3 w-3" />
-          Importar CSV
-        </Button>
 
         <Button
           variant="ghost"

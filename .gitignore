@@ -27,8 +27,6 @@ dist-ssr
 backend/database.sqlite
 backend/*.sqlite
 backend/*.sqlite-journal
-backend/uploads/*
-!backend/uploads/.gitkeep
 
 # Editor directories and files
 .vscode/*

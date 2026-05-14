@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import ItemScopeSummary from '@/components/common/ItemScopeSummary';
 
 const statusLabel = {
   pendiente: 'Pendiente', en_ejecucion: 'En ejecución', completado: 'Completado', bloqueado: 'Bloqueado',
@@ -30,12 +31,14 @@ export default function ItemInfo({ item }) {
   return (
     <Card className="border-0 shadow-sm">
       <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold">{item.activity}</h2>
-            <p className="text-sm text-muted-foreground">{item.project} — {item.tower} — {item.floor}</p>
+            <ItemScopeSummary item={item} hideActivity />
           </div>
-          <Badge className={statusColor[item.status]}>{statusLabel[item.status]}</Badge>
+          <Badge className={`${statusColor[item.status]} shrink-0`}>
+            {statusLabel[item.status]}
+          </Badge>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>

@@ -12,6 +12,7 @@ import ProjectForm from '../components/forms/ProjectForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { itemHasFloor } from '@/utils/floors';
 
 export default function MasterPlan() {
   const { user } = useAuth();
@@ -96,7 +97,7 @@ export default function MasterPlan() {
   const filteredItems = filteredMasterItems.filter((item) => {
     if (filters.project && item.project !== filters.project) return false;
     if (filters.tower && item.tower !== filters.tower) return false;
-    if (filters.floor && item.floor !== filters.floor) return false;
+    if (!itemHasFloor(item.floor, filters.floor)) return false;
     if (filters.activity && item.activity !== filters.activity) return false;
     if (filters.release && item.release_status !== filters.release) return false;
 
@@ -107,6 +108,14 @@ export default function MasterPlan() {
 
       if (!searchable.includes(s)) return false;
     }
+
+    return true;
+  });
+
+  const filteredItemIds = new Set(filteredItems.map((item) => Number(item.id)));
+  const filteredLogs = dailyLogs.filter((log) => {
+    if (!filteredItemIds.has(Number(log.master_item_id))) return false;
+    if (filters.floor && log.floor !== filters.floor) return false;
 
     return true;
   });
@@ -157,6 +166,9 @@ export default function MasterPlan() {
         filters={filters}
         setFilters={setFilters}
         projects={filteredProjects}
+        masterItems={filteredItems}
+        filterOptionItems={filteredMasterItems}
+        dailyLogs={filteredLogs}
         onNewProject={() => setShowProjectForm(true)}
         onNewItem={() => {
           setEditItem(null);
@@ -171,7 +183,7 @@ export default function MasterPlan() {
       <MasterPlanTable
         items={filteredItems}
         projects={projects}
-        dailyLogs={dailyLogs}
+        dailyLogs={filteredLogs}
         onEdit={(item) => {
           setEditItem(item);
           setShowItemForm(true);

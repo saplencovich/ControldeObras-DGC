@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Users, Plus, Trash2, FileSpreadsheet, Upload, AlertCircle } from 'lucide-react';
+import { Users, Plus, Trash2, FileSpreadsheet, Upload, AlertCircle, Pencil } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { api } from '@/lib/api';
@@ -42,12 +43,25 @@ export default function Workers() {
   const [showForm, setShowForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState('all');
   const [form, setForm] = useState({ project: '', name: '', role: '' });
+  const [formError, setFormError] = useState('');
 
+  // Estado edición
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editWorker, setEditWorker] = useState(null);
+  const [editForm, setEditForm] = useState({ project: '', name: '', role: '' });
+  const [editError, setEditError] = useState('');
+
+  // Estado selección masiva
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  // Estado importación
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [importRows, setImportRows] = useState([]);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
-  const [importProject, setImportProject] = useState(''); // ← obra seleccionada en modal
+  const [importProject, setImportProject] = useState('');
 
   const { data: projectWorkers = [], isLoading } = useQuery({
     queryKey: ['projectWorkers'],
@@ -75,6 +89,23 @@ export default function Workers() {
       queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
       setShowForm(false);
       setForm({ project: '', name: '', role: '' });
+      setFormError('');
+    },
+    onError: (err) => {
+      setFormError(err.message || 'Error al guardar.');
+    },
+  });
+
+  const updateWorker = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/project-workers/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
+      setShowEditForm(false);
+      setEditWorker(null);
+      setEditError('');
+    },
+    onError: (err) => {
+      setEditError(err.message || 'Error al actualizar.');
     },
   });
 
@@ -112,7 +143,52 @@ export default function Workers() {
     ...new Set([...filteredProjects.map((p) => p.name), ...projectNames]),
   ];
 
-  // Abre el picker siempre, sin requerir obra previa
+  // ── Selección masiva ──────────────────────────────────────────
+  const allFilteredIds = filteredWorkers.map((w) => w.id);
+  const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
+  const someSelected = allFilteredIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allFilteredIds));
+    }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedIds) {
+        await api.delete(`/project-workers/${id}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
+      setSelectedIds(new Set());
+      setShowBulkConfirm(false);
+    } catch (err) {
+      console.error('Error al eliminar:', err);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────
+
+  const handleOpenEdit = (w) => {
+    setEditWorker(w);
+    setEditForm({ project: w.project, name: w.name, role: w.role || '' });
+    setEditError('');
+    setShowEditForm(true);
+  };
+
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
@@ -144,7 +220,6 @@ export default function Workers() {
           setImportRows(parsed);
         }
 
-        // Pre-cargar obra si ya hay una seleccionada en el filtro
         setImportProject(selectedProject !== 'all' ? selectedProject : '');
         setShowImportPreview(true);
       } catch (err) {
@@ -160,19 +235,29 @@ export default function Workers() {
 
   const handleConfirmImport = async () => {
     setImporting(true);
+    setImportError('');
+    const skipped = [];
     try {
       for (const row of importRows) {
-        await api.post('/project-workers', {
-          project: importProject, // ← usa la obra del modal
-          name: row.name,
-          role: row.role,
-          active: true,
-        });
+        try {
+          await api.post('/project-workers', {
+            project: importProject,
+            name: row.name,
+            role: row.role,
+            active: true,
+          });
+        } catch (err) {
+          skipped.push(row.name);
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
       setShowImportPreview(false);
       setImportRows([]);
       setImportProject('');
+
+      if (skipped.length > 0) {
+        alert(`Importación completada.\nSe omitieron ${skipped.length} persona(s) por nombre duplicado:\n${skipped.join(', ')}`);
+      }
     } catch (err) {
       setImportError('Error al importar: ' + (err.message || 'Error desconocido'));
     } finally {
@@ -205,7 +290,7 @@ export default function Workers() {
         </h1>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={selectedProject} onValueChange={setSelectedProject}>
+          <Select value={selectedProject} onValueChange={(v) => { setSelectedProject(v); setSelectedIds(new Set()); }}>
             <SelectTrigger className="h-8 w-44 text-xs">
               <SelectValue placeholder="Filtrar por obra" />
             </SelectTrigger>
@@ -244,6 +329,7 @@ export default function Workers() {
                 name: '',
                 role: '',
               });
+              setFormError('');
               setShowForm(true);
             }}
           >
@@ -262,13 +348,28 @@ export default function Workers() {
         <TabsContent value="roster">
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">
-                Personal registrado{' '}
-                {selectedProject !== 'all' ? `— ${selectedProject}` : ''}
-                <span className="ml-2 text-sm font-normal text-muted-foreground">
-                  ({filteredWorkers.length})
-                </span>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold">
+                  Personal registrado{' '}
+                  {selectedProject !== 'all' ? `— ${selectedProject}` : ''}
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
+                    ({filteredWorkers.length})
+                  </span>
+                </CardTitle>
+
+                {/* Botón eliminar seleccionados */}
+                {selectedIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={() => setShowBulkConfirm(true)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Eliminar {selectedIds.size} seleccionado{selectedIds.size > 1 ? 's' : ''}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
 
             <CardContent>
@@ -276,6 +377,15 @@ export default function Workers() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
+                      {/* Checkbox seleccionar todo */}
+                      <TableHead className="w-8">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Seleccionar todos"
+                          className={someSelected && !allSelected ? 'opacity-50' : ''}
+                        />
+                      </TableHead>
                       <TableHead className="text-xs">Nombre completo</TableHead>
                       <TableHead className="text-xs">Cargo</TableHead>
                       <TableHead className="text-xs">Obra</TableHead>
@@ -286,31 +396,51 @@ export default function Workers() {
                   <TableBody>
                     {filteredWorkers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-12">
+                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">
                           Sin personal registrado.
                         </TableCell>
                       </TableRow>
                     )}
 
                     {filteredWorkers.map((w) => (
-                      <TableRow key={w.id} className="hover:bg-muted/30 text-xs">
+                      <TableRow
+                        key={w.id}
+                        className={`hover:bg-muted/30 text-xs ${selectedIds.has(w.id) ? 'bg-muted/20' : ''}`}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(w.id)}
+                            onCheckedChange={() => toggleSelect(w.id)}
+                            aria-label={`Seleccionar ${w.name}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{w.name}</TableCell>
                         <TableCell>{w.role || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{w.project}</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-red-400 hover:text-red-600"
-                            onClick={() =>
-                              window.confirm(`¿Eliminar a ${w.name}?`) &&
-                              deleteWorker.mutate(w.id)
-                            }
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleOpenEdit(w)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-400 hover:text-red-600"
+                              onClick={() =>
+                                window.confirm(`¿Eliminar a ${w.name}?`) &&
+                                deleteWorker.mutate(w.id)
+                              }
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -373,7 +503,7 @@ export default function Workers() {
         </TabsContent>
       </Tabs>
 
-      {/* Modal agregar persona manualmente */}
+      {/* Modal agregar persona */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -412,15 +542,111 @@ export default function Workers() {
                 placeholder="Ej: Electricista"
               />
             </div>
+
+            {formError && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-red-700">{formError}</p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); setFormError(''); }}>Cancelar</Button>
             <Button
               onClick={() => createWorker.mutate({ ...form, active: true })}
               disabled={!form.project || !form.name || createWorker.isPending}
             >
               {createWorker.isPending ? 'Guardando...' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal editar persona */}
+      <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Persona</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Obra *</Label>
+              <Select value={editForm.project} onValueChange={(v) => setEditForm({ ...editForm, project: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar obra" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allProjects.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs">Nombre completo *</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="Ej: Juan Pérez González"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">Cargo</Label>
+              <Input
+                value={editForm.role}
+                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                placeholder="Ej: Electricista"
+              />
+            </div>
+
+            {editError && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-red-700">{editError}</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowEditForm(false); setEditError(''); }}>Cancelar</Button>
+            <Button
+              onClick={() => updateWorker.mutate({ id: editWorker.id, data: editForm })}
+              disabled={!editForm.project || !editForm.name || updateWorker.isPending}
+            >
+              {updateWorker.isPending ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal confirmación eliminación masiva */}
+      <Dialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4 text-red-500" />
+              Eliminar {selectedIds.size} persona{selectedIds.size > 1 ? 's' : ''}
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            Esta acción eliminará permanentemente a las {selectedIds.size} personas seleccionadas del padrón. No se puede deshacer.
+          </p>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkConfirm(false)} disabled={bulkDeleting}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? 'Eliminando...' : `Eliminar ${selectedIds.size}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -443,7 +669,6 @@ export default function Workers() {
             </div>
           ) : (
             <>
-              {/* Selector de obra dentro del modal */}
               <div>
                 <Label className="text-xs">Obra destino *</Label>
                 <Select value={importProject} onValueChange={setImportProject}>
@@ -461,6 +686,7 @@ export default function Workers() {
               <p className="text-sm text-muted-foreground">
                 Se importarán <strong>{importRows.length} personas</strong>.
                 {importProject && <> Obra destino: <strong>{importProject}</strong>.</>}
+                {' '}Si algún nombre ya existe en el padrón, se omitirá automáticamente.
               </p>
 
               <div className="max-h-64 overflow-y-auto rounded-lg border">

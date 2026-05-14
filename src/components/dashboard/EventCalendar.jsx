@@ -10,7 +10,20 @@ import {
   subMonths,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Flag,
+  MapPin,
+  Target,
+  Users,
+  X,
+} from 'lucide-react';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,9 +35,181 @@ function parseLocalDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`);
 }
 
+function getEventIcon(type) {
+  if (type === 'start') return <Flag className="h-3 w-3 shrink-0" />;
+  if (type === 'end') return <Target className="h-3 w-3 shrink-0" />;
+  return <ClipboardList className="h-3 w-3 shrink-0" />;
+}
+
+function EventDetailCard({ event, onClose }) {
+  if (!event) return null;
+
+  const detail = event.detail || {};
+  const isActivity = event.type === 'start' || event.type === 'end';
+
+  return (
+    <div className="rounded-lg border bg-card p-3 shadow-sm">
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded text-white', event.color)}>
+              {getEventIcon(event.type)}
+            </span>
+            <p className="truncate text-sm font-semibold">{detail.title || event.label}</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {event.type === 'start' ? 'Inicio de actividad' : event.type === 'end' ? 'Termino de actividad' : 'Reporte diario'}
+          </p>
+        </div>
+
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div className="grid gap-2 text-xs sm:grid-cols-2">
+        {detail.project && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Proyecto</p>
+            <p className="font-medium">{detail.project}</p>
+          </div>
+        )}
+
+        {(detail.tower || detail.floor) && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Ubicacion</p>
+            <p className="flex items-center gap-1 font-medium">
+              <MapPin className="h-3 w-3" />
+              {[detail.tower, detail.floor].filter(Boolean).join(' / ')}
+            </p>
+          </div>
+        )}
+
+        {detail.crew && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Cuadrilla</p>
+            <p className="flex items-center gap-1 font-medium">
+              <Users className="h-3 w-3" />
+              {detail.crew}
+            </p>
+          </div>
+        )}
+
+        {detail.supervisor && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Supervisor</p>
+            <p className="font-medium">{detail.supervisor}</p>
+          </div>
+        )}
+
+        {detail.planned != null && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Planificado</p>
+            <p className="font-medium">
+              {detail.planned} {detail.unit || ''}
+            </p>
+          </div>
+        )}
+
+        {detail.executed != null && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Ejecutado</p>
+            <p className="flex items-center gap-1 font-medium">
+              <CheckCircle2 className="h-3 w-3" />
+              {detail.executed}
+            </p>
+          </div>
+        )}
+
+        {detail.hours != null && detail.hours !== '' && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Horas</p>
+            <p className="flex items-center gap-1 font-medium">
+              <Clock className="h-3 w-3" />
+              {detail.hours}h
+            </p>
+          </div>
+        )}
+
+        {isActivity && (detail.start || detail.end) && (
+          <div className="rounded-md bg-muted/50 p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">{event.type === 'start' ? 'Termino' : 'Inicio'}</p>
+            <p className="font-medium">{event.type === 'start' ? detail.end : detail.start}</p>
+          </div>
+        )}
+      </div>
+
+      {detail.restriction && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-red-50 p-2 text-xs font-medium text-red-700">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Con restriccion
+        </div>
+      )}
+
+      {detail.obs && (
+        <div className="mt-2 rounded-md bg-muted/50 p-2 text-xs">
+          <p className="mb-1 text-[10px] uppercase text-muted-foreground">Observacion</p>
+          <p className="text-muted-foreground">{detail.obs}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayEventsPanel({ selectedDay, selectedEvent, onSelectEvent, onClose }) {
+  if (!selectedDay) return null;
+
+  return (
+    <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(260px,0.85fr)_minmax(320px,1.15fr)]">
+      <div className="rounded-lg border bg-card p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">
+              Eventos del {format(selectedDay.date, 'd MMM yyyy', { locale: es })}
+            </p>
+            <p className="text-xs text-muted-foreground">{selectedDay.events.length} eventos</p>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+
+        <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+          {selectedDay.events.map((event) => (
+            <button
+              key={event.id}
+              type="button"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition hover:bg-muted',
+                selectedEvent?.id === event.id && 'border-accent bg-accent/10'
+              )}
+              onClick={() => onSelectEvent(event)}
+            >
+              <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded text-white', event.color)}>
+                {getEventIcon(event.type)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{event.label}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {[event.detail?.tower, event.detail?.floor, event.detail?.crew || event.detail?.supervisor]
+                    .filter(Boolean)
+                    .join(' / ')}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <EventDetailCard event={selectedEvent || selectedDay.events[0]} onClose={onClose} />
+    </div>
+  );
+}
+
 export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [tooltip, setTooltip] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
   const monthStart = startOfMonth(currentMonth);
@@ -66,9 +251,10 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
   const getEventsForDay = (day) => {
     const events = [];
 
-    masterItems.forEach((item) => {
+    masterItems.forEach((item, itemIndex) => {
       if (item.start_date && isSameDay(parseLocalDate(item.start_date), day)) {
         events.push({
+          id: `start-${item.id || itemIndex}`,
           type: 'start',
           label: item.activity,
           color: 'bg-blue-500',
@@ -86,6 +272,7 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
       }
       if (item.end_date && isSameDay(parseLocalDate(item.end_date), day)) {
         events.push({
+          id: `end-${item.id || itemIndex}`,
           type: 'end',
           label: item.activity,
           color: 'bg-red-500',
@@ -105,9 +292,10 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
 
     dailyLogs
       .filter((log) => !log.master_item_id || masterItemIds.has(log.master_item_id))
-      .forEach((log) => {
+      .forEach((log, logIndex) => {
         if (log.date && isSameDay(parseLocalDate(log.date), day)) {
           events.push({
+            id: `log-${log.id || logIndex}`,
             type: 'log',
             label: log.activity || 'Reporte',
             color: 'bg-emerald-500',
@@ -127,6 +315,16 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
       });
 
     return events;
+  };
+
+  const openDayEvents = (day, events) => {
+    setSelectedDay({ date: day, events });
+    setSelectedEvent(events[0] || null);
+  };
+
+  const openEvent = (day, events, event) => {
+    setSelectedDay({ date: day, events });
+    setSelectedEvent(event);
   };
 
   return (
@@ -249,35 +447,25 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
 
                 <div className="mt-1 space-y-0.5">
                   {events.slice(0, 4).map((event, index) => (
-                    <div
+                    <button
                       key={`${event.type}-${event.label}-${index}`}
-                      className={`${event.color} cursor-pointer truncate rounded px-1 py-0.5 text-[8px] sm:text-[9px] leading-tight text-white`}
-                      onMouseEnter={(e) =>
-                        setTooltip({
-                          rect: e.currentTarget.getBoundingClientRect(),
-                          event,
-                        })
-                      }
-                      onMouseLeave={() => setTooltip(null)}
+                      type="button"
+                      className={`${event.color} flex w-full cursor-pointer items-center gap-0.5 truncate rounded px-1 py-0.5 text-left text-[8px] leading-tight text-white sm:text-[9px]`}
+                      onClick={() => openEvent(day, events, event)}
                     >
-                      {event.type === 'start' ? '▶' : event.type === 'end' ? '⏹' : '📋'} {event.label}
-                    </div>
+                      {getEventIcon(event.type)}
+                      <span className="truncate">{event.label}</span>
+                    </button>
                   ))}
 
                   {events.length > 4 && (
-                    <div
-                      className="cursor-pointer px-1 text-[9px] text-muted-foreground hover:text-foreground"
-                      onMouseEnter={(e) =>
-                        setTooltip({
-                          rect: e.currentTarget.getBoundingClientRect(),
-                          event: null,
-                          allEvents: events,
-                        })
-                      }
-                      onMouseLeave={() => setTooltip(null)}
+                    <button
+                      type="button"
+                      className="w-full cursor-pointer rounded px-1 py-0.5 text-left text-[9px] font-medium text-accent hover:bg-accent/10"
+                      onClick={() => openDayEvents(day, events)}
                     >
-                      +{events.length - 4} más
-                    </div>
+                      Ver todos
+                    </button>
                   )}
                 </div>
               </div>
@@ -286,65 +474,15 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
         </div>
         </div>
 
-        {tooltip && (
-          <div
-            className="pointer-events-none fixed z-50 w-56 rounded-lg border border-border bg-popover p-3 text-xs shadow-xl"
-            style={{
-              top: tooltip.rect.bottom + 6,
-              left: Math.min(tooltip.rect.left, window.innerWidth - 230),
-            }}
-          >
-            {tooltip.allEvents ? (
-              <div className="space-y-2">
-                <p className="mb-1 font-semibold text-foreground">Todas las actividades</p>
-                {tooltip.allEvents.map((event, index) => (
-                  <div key={`${event.type}-${event.label}-${index}`} className="flex items-start gap-1.5">
-                    <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${event.color}`} />
-                    <span className="leading-tight text-muted-foreground">{event.label}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <p className="mb-1.5 font-semibold text-foreground">{tooltip.event.detail.title}</p>
-                {tooltip.event.type === 'start' || tooltip.event.type === 'end' ? (
-                  <div className="space-y-1 text-muted-foreground">
-                    {tooltip.event.detail.project && <p>📁 {tooltip.event.detail.project}</p>}
-                    {tooltip.event.detail.tower && (
-                      <p>
-                        🏗️ {tooltip.event.detail.tower}
-                        {tooltip.event.detail.floor && ` — ${tooltip.event.detail.floor}`}
-                      </p>
-                    )}
-                    {tooltip.event.detail.crew && <p>👷 {tooltip.event.detail.crew}</p>}
-                    {tooltip.event.detail.planned && (
-                      <p>
-                        📊 Plan: {tooltip.event.detail.planned} {tooltip.event.detail.unit}
-                      </p>
-                    )}
-                    {tooltip.event.type === 'start' && tooltip.event.detail.end && <p>📅 Término: {tooltip.event.detail.end}</p>}
-                    {tooltip.event.type === 'end' && tooltip.event.detail.start && <p>📅 Inicio: {tooltip.event.detail.start}</p>}
-                  </div>
-                ) : (
-                  <div className="space-y-1 text-muted-foreground">
-                    {tooltip.event.detail.project && <p>📁 {tooltip.event.detail.project}</p>}
-                    {tooltip.event.detail.tower && (
-                      <p>
-                        🏗️ {tooltip.event.detail.tower}
-                        {tooltip.event.detail.floor && ` — ${tooltip.event.detail.floor}`}
-                      </p>
-                    )}
-                    {tooltip.event.detail.supervisor && <p>👤 {tooltip.event.detail.supervisor}</p>}
-                    {tooltip.event.detail.executed != null && <p>✅ Ejecutado: {tooltip.event.detail.executed}</p>}
-                    {tooltip.event.detail.hours && <p>⏱️ Horas: {tooltip.event.detail.hours}h</p>}
-                    {tooltip.event.detail.restriction && <p className="font-medium text-red-600">⚠️ Con restricción</p>}
-                    {tooltip.event.detail.obs && <p className="truncate">💬 {tooltip.event.detail.obs}</p>}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+        <DayEventsPanel
+          selectedDay={selectedDay}
+          selectedEvent={selectedEvent}
+          onSelectEvent={setSelectedEvent}
+          onClose={() => {
+            setSelectedDay(null);
+            setSelectedEvent(null);
+          }}
+        />
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">

@@ -17,6 +17,7 @@ import DailyLogForm from "../components/forms/DailyLogForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { itemHasFloor } from "@/utils/floors";
 
 function DashboardSkeleton() {
   return (
@@ -168,7 +169,7 @@ export default function Dashboard() {
   const filteredItems = filteredMasterItems.filter((item) => {
     if (filters.project && item.project !== filters.project) return false;
     if (filters.tower && item.tower !== filters.tower) return false;
-    if (filters.floor && item.floor !== filters.floor) return false;
+    if (!itemHasFloor(item.floor, filters.floor)) return false;
     if (filters.activity && item.activity !== filters.activity) return false;
     if (filters.release && item.release_status !== filters.release)
       return false;
@@ -192,9 +193,12 @@ export default function Dashboard() {
   });
 
   const filteredItemIds = new Set(filteredItems.map((i) => Number(i.id)));
-  const filteredLogs = dailyLogs.filter((log) =>
-    filteredItemIds.has(Number(log.master_item_id)),
-  );
+  const filteredLogs = dailyLogs.filter((log) => {
+    if (!filteredItemIds.has(Number(log.master_item_id))) return false;
+    if (filters.floor && log.floor !== filters.floor) return false;
+
+    return true;
+  });
 
   const handleEdit = (item) => {
     setEditItem(item);

@@ -1,120 +1,278 @@
 import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import FileSaver from 'file-saver';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/6324de60d_logoclientes-8.png';
+const saveAs = FileSaver.saveAs || FileSaver;
 
-/** @type {import('exceljs').FillPattern} */
-const headerFill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: 'FF142952' }, // Azul primary
+const COLORS = {
+  primary: 'FF142952',
+  primarySoft: 'FFEAF0F8',
+  accent: 'FFF59E0B',
+  headerText: 'FFFFFFFF',
+  text: 'FF0F172A',
+  mutedText: 'FF64748B',
+  border: 'FFCBD5E1',
+  zebra: 'FFF8FAFC',
+  worker: 'FFF1F5F9',
+  warningBg: 'FFFEF3C7',
+  warningText: 'FF92400E',
+  infoBg: 'FFDBEAFE',
+  infoText: 'FF1D4ED8',
+  dangerBg: 'FFFEE2E2',
+  dangerText: 'FFB91C1C',
+  successBg: 'FFD1FAE5',
+  successText: 'FF047857',
 };
 
-const headerFont = {
-  color: { argb: 'FFFFFFFF' },
-  bold: true,
-  size: 12,
-};
-
-/** @type {Partial<import('exceljs').Borders>} */
 const thinBorder = {
-  top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-  left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-  bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-  right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  top: { style: 'thin', color: { argb: COLORS.border } },
+  left: { style: 'thin', color: { argb: COLORS.border } },
+  bottom: { style: 'thin', color: { argb: COLORS.border } },
+  right: { style: 'thin', color: { argb: COLORS.border } },
 };
 
-/** @type {import('exceljs').FillPattern} */
-const subtitleFill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: 'FFFDE8D8' },
+const mediumTopBorder = {
+  ...thinBorder,
+  top: { style: 'medium', color: { argb: COLORS.primary } },
 };
 
-/** @param {import('exceljs').Row} row */
-function styleHeader(row) {
-  row.eachCell((cell) => {
-    cell.fill = headerFill;
-    cell.font = headerFont;
-    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    cell.border = thinBorder;
-  });
-  row.height = 28;
+const statusLabels = {
+  pendiente: 'Pendiente',
+  en_ejecucion: 'En ejecución',
+  no_liberado: 'No liberado',
+  liberado: 'Liberado',
+  bloqueado: 'Bloqueado',
+  completado: 'Finalizado',
+  finalizado: 'Finalizado',
+};
+
+const statusStyles = {
+  Pendiente: { fill: COLORS.warningBg, font: COLORS.warningText },
+  'En ejecución': { fill: COLORS.infoBg, font: COLORS.infoText },
+  'No liberado': { fill: COLORS.warningBg, font: COLORS.warningText },
+  Liberado: { fill: COLORS.successBg, font: COLORS.successText },
+  Bloqueado: { fill: COLORS.dangerBg, font: COLORS.dangerText },
+  Finalizado: { fill: COLORS.successBg, font: COLORS.successText },
+};
+
+function solidFill(argb) {
+  return { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 }
 
-/** @param {import('exceljs').Worksheet} sheet @param {number} [startRow] */
-function styleSheetRows(sheet, startRow = 4) {
-  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-    if (rowNumber < startRow) return;
-    const isEven = rowNumber % 2 === 0;
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      cell.border = thinBorder;
-      const colNumber = Number(cell.col);
-      cell.alignment = { vertical: 'middle', horizontal: colNumber === 4 || colNumber === 5 ? 'left' : 'center', wrapText: true };
-      if (isEven) {
-        cell.fill = /** @type {import('exceljs').FillPattern} */ ({
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFC' },
-        });
-      }
-    });
-  });
+function normalizeStatus(value) {
+  const key = String(value || 'pendiente').trim().toLowerCase();
+  return statusLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-/**
- * @param {string|number|undefined} statusValue
- * @returns {{ fill: any; font: any }}
- */
-function getStatusStyle(statusValue) {
-  const statusVal = String(statusValue || '').toLowerCase();
-  if (statusVal.includes('complet')) {
-    return {
-      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }),
-      font: { color: { argb: 'FF047857' }, bold: true },
-    };
+function normalizeRelease(value) {
+  if (!value) return '';
+  return normalizeStatus(value);
+}
+
+function sanitizeExcelText(value) {
+  return String(value ?? '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .slice(0, 32767);
+}
+
+function sanitizeExcelValue(value) {
+  if (typeof value === 'string') return sanitizeExcelText(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (Array.isArray(value)) return value.map(sanitizeExcelValue);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sanitizeExcelValue(item)])
+    );
   }
-  if (statusVal.includes('ejec')) {
-    return {
-      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }),
-      font: { color: { argb: 'FF1D4ED8' }, bold: true },
-    };
+  return value ?? '';
+}
+
+function sanitizeRowValues(values) {
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, sanitizeExcelValue(value)])
+  );
+}
+
+function parseWorkers(rawWorkers) {
+  if (Array.isArray(rawWorkers)) return rawWorkers;
+  if (typeof rawWorkers === 'string' && rawWorkers.trim()) {
+    try {
+      const parsed = JSON.parse(rawWorkers);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
   }
-  if (statusVal.includes('bloque')) {
-    return {
-      fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }),
-      font: { color: { argb: 'FFB91C1C' }, bold: true },
-    };
-  }
+  return [];
+}
+
+function getMasterContext(masterItems, log) {
+  const masterItem = masterItems.find((item) => String(item.id) === String(log.master_item_id));
+
   return {
-    fill: /** @type {import('exceljs').FillPattern} */ ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }),
-    font: { color: { argb: 'FF334155' }, bold: true },
+    project: log.project || masterItem?.project || '',
+    tower: log.tower || masterItem?.tower || '',
+    floor: log.floor || masterItem?.floor || '',
+    activity: log.activity || masterItem?.activity || '',
   };
 }
 
-/** @param {import('exceljs').Worksheet} sheet @param {string} subtitle @param {string} lastColumn */
-function styleTitleRows(sheet, subtitle, lastColumn) {
-  const titleRow = sheet.getRow(1);
-  titleRow.font = { size: 16, bold: true, color: { argb: 'FF111827' } };
-  titleRow.alignment = { vertical: 'middle', horizontal: 'left' };
-  sheet.mergeCells(`A1:${lastColumn}1`);
-  titleRow.height = 24;
+function summarizeFloors(value) {
+  const text = Array.isArray(value) ? value.join(', ') : String(value || '');
+  const floors = text
+    .split(/[,;/|]+/)
+    .map((floor) => floor.trim())
+    .filter(Boolean);
 
-  const subtitleRow = sheet.getRow(2);
-  subtitleRow.values = [subtitle];
-  subtitleRow.font = { size: 11, color: { argb: 'FF1F2937' } };
-  subtitleRow.fill = subtitleFill;
-  subtitleRow.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-  subtitleRow.eachCell((cell) => {
-    cell.border = thinBorder;
-  });
-  sheet.mergeCells(`A2:${lastColumn}2`);
-  subtitleRow.height = 20;
+  if (floors.length <= 4) return text;
+
+  const parsed = floors
+    .map((floor) => {
+      const match = floor.match(/^([A-Za-z]*)\s*0*(\d+)$/);
+      return match ? { prefix: match[1] || 'P', number: Number(match[2]) } : null;
+    })
+    .filter(Boolean);
+
+  const samePrefix = parsed.length === floors.length && parsed.every((floor) => floor.prefix === parsed[0].prefix);
+
+  if (samePrefix) {
+    const numbers = parsed.map((floor) => floor.number).sort((a, b) => a - b);
+    return `${parsed[0].prefix}${numbers[0]}-${parsed[0].prefix}${numbers[numbers.length - 1]}`;
+  }
+
+  return floors.reduce((lines, floor, index) => {
+    const lineIndex = Math.floor(index / 3);
+    lines[lineIndex] = [...(lines[lineIndex] || []), floor];
+    return lines;
+  }, []).map((line) => line.join(', ')).join('\n');
 }
 
-/** @param {import('exceljs').Workbook} workbook */
+function capRowHeight(row, maxHeight = 58) {
+  const maxLines = Math.max(
+    1,
+    ...row.values.map((value) => String(value || '').split('\n').length)
+  );
+  row.height = Math.min(maxHeight, Math.max(22, maxLines * 15));
+}
+
+function styleHeader(row) {
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.fill = solidFill(COLORS.primary);
+    cell.font = { color: { argb: COLORS.headerText }, bold: true, size: 10 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = thinBorder;
+  });
+  row.height = 30;
+}
+
+function styleTitle(sheet, title, subtitle, lastColumn, imageId) {
+  sheet.mergeCells(`A1:${lastColumn}1`);
+  sheet.mergeCells(`A2:${lastColumn}2`);
+
+  const titleRow = sheet.getRow(1);
+  titleRow.getCell(1).value = title;
+  titleRow.getCell(1).font = { size: 16, bold: true, color: { argb: COLORS.primary } };
+  titleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+  titleRow.height = 26;
+
+  const subtitleRow = sheet.getRow(2);
+  subtitleRow.getCell(1).value = subtitle;
+  subtitleRow.getCell(1).font = { size: 10, color: { argb: COLORS.mutedText } };
+  subtitleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+  subtitleRow.height = 22;
+
+  if (imageId) {
+    sheet.addImage(imageId, {
+      tl: { col: Math.max(0, sheet.columnCount - 2.2), row: 0.15 },
+      ext: { width: 120, height: 34 },
+    });
+  }
+}
+
+function styleDataRows(sheet, startRow, endRow, leftAlignedColumns = []) {
+  for (let rowNumber = startRow; rowNumber <= endRow; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    const isEven = (rowNumber - startRow) % 2 === 1;
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.border = thinBorder;
+      cell.font = { color: { argb: COLORS.text }, size: 10 };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: leftAlignedColumns.includes(colNumber) ? 'left' : 'center',
+        wrapText: true,
+      };
+
+      if (isEven) {
+        cell.fill = solidFill(COLORS.zebra);
+      }
+    });
+
+    capRowHeight(row);
+  }
+}
+
+function applyStatusStyle(cell) {
+  const label = normalizeStatus(cell.value);
+  const style = statusStyles[label] || statusStyles.Pendiente;
+
+  cell.value = label;
+  cell.fill = solidFill(style.fill);
+  cell.font = { color: { argb: style.font }, bold: true, size: 10 };
+  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+}
+
+function applyReleaseStyle(cell) {
+  const label = normalizeRelease(cell.value);
+  if (!label) return;
+
+  const style = statusStyles[label] || statusStyles.Pendiente;
+  cell.value = label;
+  cell.fill = solidFill(style.fill);
+  cell.font = { color: { argb: style.font }, bold: true, size: 10 };
+  cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+}
+
+function applyAutoFit(sheet, limits) {
+  sheet.columns.forEach((column, index) => {
+    const columnNumber = index + 1;
+    const limit = limits[columnNumber] || { min: 10, max: 28 };
+    let maxLength = limit.min;
+
+    column.eachCell({ includeEmpty: true }, (cell) => {
+      const text = String(cell.value?.richText ? cell.value.richText.map((part) => part.text).join('') : cell.value || '');
+      const longestLine = Math.max(...text.split('\n').map((line) => line.length));
+      maxLength = Math.max(maxLength, longestLine + 2);
+    });
+
+    column.width = Math.min(limit.max, Math.max(limit.min, maxLength));
+  });
+}
+
+function addKpiBlock(sheet, kpis) {
+  const row = sheet.getRow(4);
+  row.height = 42;
+
+  kpis.forEach((kpi, index) => {
+    const startColumn = 1 + index * 2;
+    const endColumn = startColumn + 1;
+    sheet.mergeCells(4, startColumn, 4, endColumn);
+
+    const cell = row.getCell(startColumn);
+    cell.value = {
+      richText: [
+        { text: `${kpi.label}\n`, font: { size: 8, color: { argb: COLORS.mutedText } } },
+        { text: String(kpi.value), font: { size: 14, bold: true, color: { argb: kpi.color || COLORS.primary } } },
+      ],
+    };
+    cell.fill = solidFill(kpi.fill || 'FFFFFFFF');
+    cell.border = thinBorder;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+}
+
 async function loadLogoImageId(workbook) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -125,10 +283,9 @@ async function loadLogoImageId(workbook) {
         canvas.width = img.width;
         canvas.height = img.height;
         canvas.getContext('2d').drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL('image/png');
-        const base64 = dataUrl.split(',')[1];
+        const base64 = canvas.toDataURL('image/png').split(',')[1];
         resolve(workbook.addImage({ base64, extension: 'png' }));
-      } catch (err) {
+      } catch (error) {
         resolve(null);
       }
     };
@@ -137,186 +294,353 @@ async function loadLogoImageId(workbook) {
   });
 }
 
-/** @param {import('exceljs').Worksheet} sheet @param {number|null} imageId */
-function insertLogo(sheet, imageId) {
-  if (!imageId) return;
-  sheet.addImage(imageId, {
-    tl: { col: 9.5, row: 0.15 },
-    ext: { width: 110, height: 30 },
+function addProgressBars(sheet, startRow, endRow, columnLetter) {
+  if (endRow < startRow) return;
+
+  sheet.addConditionalFormatting({
+    ref: `${columnLetter}${startRow}:${columnLetter}${endRow}`,
+    rules: [
+      {
+        type: 'dataBar',
+        priority: 1,
+        cfvo: [{ type: 'num', value: 0 }, { type: 'num', value: 100 }],
+        color: { argb: COLORS.infoText },
+        showValue: true,
+      },
+    ],
   });
 }
 
-/**
- * @param {any[]} masterItems
- * @param {any[]} dailyLogs
- */
-export async function exportReportExcel(masterItems, dailyLogs) {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Control de Obras DGC';
-  workbook.created = new Date();
-
-  const logoImageId = await loadLogoImageId(workbook);
-
-  const masterSheet = workbook.addWorksheet('Plan Maestro', {
-    properties: { defaultRowHeight: 24 },
-    views: [{ state: 'frozen', ySplit: 3 }],
+function addMasterSheet(workbook, masterItems, logoImageId, exportedAt) {
+  const sheet = workbook.addWorksheet('Plan Maestro', {
+    properties: { defaultRowHeight: 24, outlineLevelRow: 1 },
+    views: [{ state: 'frozen', ySplit: 6, xSplit: 2 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
 
-  masterSheet.columns = [
-    { header: 'Proyecto', key: 'project', width: 28 },
-    { header: 'Torre', key: 'tower', width: 14 },
-    { header: 'Piso', key: 'floor', width: 14 },
-    { header: 'Actividad', key: 'activity', width: 32 },
-    { header: 'Cuadrilla', key: 'crew', width: 24 },
-    { header: 'Planificado', key: 'planned', width: 14 },
-    { header: 'Ejecutado', key: 'executed', width: 14 },
-    { header: '% Avance', key: 'progress', width: 12 },
-    { header: 'Estado', key: 'status', width: 18 },
-    { header: 'Liberación', key: 'release', width: 18 },
-    { header: 'Restricciones', key: 'restrictions', width: 36 },
-    { header: 'Observaciones', key: 'observations', width: 38 },
+  sheet.columns = [
+    { key: 'project', width: 24 },
+    { key: 'tower', width: 12 },
+    { key: 'floor', width: 14 },
+    { key: 'activity', width: 30 },
+    { key: 'crew', width: 20 },
+    { key: 'planned', width: 12 },
+    { key: 'executed', width: 12 },
+    { key: 'progress', width: 12 },
+    { key: 'status', width: 16 },
+    { key: 'release', width: 16 },
+    { key: 'restrictions', width: 28 },
+    { key: 'observations', width: 32 },
   ];
 
-  masterSheet.insertRow(1, ['Informe de Control de Obras DGC']);
-  masterSheet.insertRow(2, ['']);
-  styleTitleRows(masterSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'L');
-  insertLogo(masterSheet, logoImageId);
-  styleHeader(masterSheet.getRow(3));
+  const headerRowNumber = 6;
+  const totalItems = masterItems.length;
+  const pendingItems = masterItems.filter((item) => normalizeStatus(item.status) === 'Pendiente').length;
+  const runningItems = masterItems.filter((item) => normalizeStatus(item.status) === 'En ejecución').length;
+  const blockedItems = masterItems.filter((item) => normalizeStatus(item.status) === 'Bloqueado').length;
+  const averageProgress = totalItems
+    ? masterItems.reduce((sum, item) => {
+      const planned = Number(item.planned_qty) || 0;
+      const executed = Number(item.executed_qty) || 0;
+      return sum + (planned > 0 ? (executed / planned) * 100 : 0);
+    }, 0) / totalItems
+    : 0;
+
+  styleTitle(
+    sheet,
+    'Informe de Control de Obras DGC',
+    `Exportado: ${exportedAt} | Plan maestro consolidado`,
+    'L',
+    logoImageId
+  );
+  addKpiBlock(sheet, [
+    { label: 'Total actividades', value: totalItems, color: COLORS.primary },
+    { label: 'Pendientes', value: pendingItems, color: COLORS.warningText, fill: COLORS.warningBg },
+    { label: 'En ejecución', value: runningItems, color: COLORS.infoText, fill: COLORS.infoBg },
+    { label: 'Avance promedio', value: `${averageProgress.toFixed(1)}%`, color: COLORS.successText, fill: COLORS.successBg },
+    { label: 'Bloqueadas', value: blockedItems, color: COLORS.dangerText, fill: COLORS.dangerBg },
+  ]);
+
+  sheet.getRow(headerRowNumber).values = [
+    'Proyecto',
+    'Torre',
+    'Piso',
+    'Actividad',
+    'Cuadrilla',
+    'Planificado',
+    'Ejecutado',
+    '% Avance',
+    'Estado',
+    'Liberación',
+    'Restricciones',
+    'Observaciones',
+  ];
+  styleHeader(sheet.getRow(headerRowNumber));
 
   masterItems.forEach((item) => {
     const planned = Number(item.planned_qty) || 0;
     const executed = Number(item.executed_qty) || 0;
     const pct = planned > 0 ? Number(((executed / planned) * 100).toFixed(1)) : 0;
-
-    const row = masterSheet.addRow({
+    const row = sheet.addRow(sanitizeRowValues({
       project: item.project || '',
       tower: item.tower || '',
-      floor: item.floor || '',
+      floor: summarizeFloors(item.floor),
       activity: item.activity || '',
       crew: item.crew_name || '',
       planned,
       executed,
       progress: pct,
-      status: item.status || 'Pendiente',
-      release: item.release_status || '',
+      status: normalizeStatus(item.status),
+      release: normalizeRelease(item.release_status),
       restrictions: item.restrictions || '',
       observations: item.observations || '',
-    });
+    }));
 
     row.getCell('planned').numFmt = '#,##0';
     row.getCell('executed').numFmt = '#,##0';
-    row.getCell('progress').numFmt = '0.0\\%';
-    row.getCell('progress').alignment = { horizontal: 'right', vertical: 'middle' };
-
-    const statusCell = row.getCell('status');
-    const statusStyle = getStatusStyle(statusCell.value == null ? undefined : String(statusCell.value));
-    statusCell.fill = /** @type {import('exceljs').Fill} */ (statusStyle.fill);
-    statusCell.font = statusStyle.font;
-    statusCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('progress').numFmt = '0.0';
+    row.getCell('restrictions').alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+    row.getCell('observations').alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+    applyStatusStyle(row.getCell('status'));
+    applyReleaseStyle(row.getCell('release'));
   });
 
-  masterSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 12 } };
-  styleSheetRows(masterSheet, 4);
-  masterSheet.properties.tabColor = { argb: '142952' };
+  const lastRow = sheet.lastRow.number;
+  styleDataRows(sheet, headerRowNumber + 1, lastRow, [1, 3, 4, 5, 11, 12]);
 
-  const logSheet = workbook.addWorksheet('Reportes Diarios', {
+  for (let rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber += 1) {
+    applyStatusStyle(sheet.getRow(rowNumber).getCell('status'));
+    applyReleaseStyle(sheet.getRow(rowNumber).getCell('release'));
+  }
+
+  sheet.autoFilter = { from: { row: headerRowNumber, column: 1 }, to: { row: headerRowNumber, column: 12 } };
+  addProgressBars(sheet, headerRowNumber + 1, lastRow, 'H');
+  applyAutoFit(sheet, {
+    1: { min: 16, max: 26 },
+    2: { min: 10, max: 14 },
+    3: { min: 10, max: 18 },
+    4: { min: 20, max: 34 },
+    5: { min: 16, max: 24 },
+    6: { min: 11, max: 14 },
+    7: { min: 11, max: 14 },
+    8: { min: 11, max: 13 },
+    9: { min: 13, max: 17 },
+    10: { min: 13, max: 17 },
+    11: { min: 18, max: 34 },
+    12: { min: 20, max: 36 },
+  });
+
+  sheet.properties.tabColor = { argb: COLORS.primary };
+}
+
+function styleReportRow(row, hasError) {
+  row.font = { bold: true, color: { argb: hasError ? COLORS.dangerText : COLORS.text }, size: 10 };
+  row.height = 30;
+
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.border = hasError ? { ...mediumTopBorder, bottom: { style: 'thin', color: { argb: COLORS.dangerText } } } : mediumTopBorder;
+    cell.fill = solidFill(hasError ? COLORS.dangerBg : COLORS.primarySoft);
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  row.getCell('activity').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  row.getCell('observations').alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+}
+
+function styleWorkerRow(row) {
+  row.font = { italic: true, color: { argb: COLORS.mutedText }, size: 10 };
+  row.height = 23;
+
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.border = thinBorder;
+    cell.fill = solidFill(COLORS.worker);
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
+
+  row.getCell('worker').alignment = { vertical: 'middle', horizontal: 'left', indent: 2, wrapText: true };
+  row.getCell('role').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+}
+
+function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exportedAt) {
+  const sheet = workbook.addWorksheet('Reportes Diarios', {
     properties: { defaultRowHeight: 24 },
-    views: [{ state: 'frozen', ySplit: 3 }],
+    views: [{ state: 'frozen', ySplit: 6 }],
   });
 
-  logSheet.columns = [
-    { header: 'Fecha', key: 'date', width: 16 },
-    { header: 'Proyecto', key: 'project', width: 26 },
-    { header: 'Torre', key: 'tower', width: 14 },
-    { header: 'Piso', key: 'floor', width: 14 },
-    { header: 'Actividad', key: 'activity', width: 32 },
-    { header: 'Supervisor', key: 'supervisor', width: 24 },
-    { header: 'Trabajador', key: 'worker', width: 24 },
-    { header: 'Cargo', key: 'role', width: 20 },
-    { header: 'Ejecutado Hoy', key: 'executed', width: 16 },
-    { header: 'Horas', key: 'hours', width: 14 },
-    { header: 'Restricción', key: 'hasRestriction', width: 16 },
-    { header: 'Detalle Restricción', key: 'restrictionDetail', width: 38 },
-    { header: 'Observaciones', key: 'observations', width: 38 },
+  sheet.columns = [
+    { key: 'date', width: 13 },
+    { key: 'project', width: 22 },
+    { key: 'tower', width: 11 },
+    { key: 'floor', width: 11 },
+    { key: 'activity', width: 30 },
+    { key: 'supervisor', width: 20 },
+    { key: 'crewTotal', width: 12 },
+    { key: 'hours', width: 10 },
+    { key: 'hasRestriction', width: 13 },
+    { key: 'observations', width: 30 },
+    { key: 'worker', width: 24 },
+    { key: 'role', width: 18 },
+    { key: 'workerExecuted', width: 13 },
+    { key: 'workerHours', width: 12 },
+    { key: 'validation', width: 20 },
   ];
 
-  logSheet.insertRow(1, ['Informe de Reportes Diarios']);
-  logSheet.insertRow(2, ['']);
-  styleTitleRows(logSheet, `Fecha: ${format(new Date(), 'dd MMM yyyy', { locale: es })}`, 'M');
-  insertLogo(logSheet, logoImageId);
-  styleHeader(logSheet.getRow(3));
+  const headerRowNumber = 6;
+  const logsWithRestriction = dailyLogs.filter((log) => log.has_restriction).length;
+  const totalHours = dailyLogs.reduce((sum, log) => sum + (Number(log.hours_worked) || 0), 0);
+  const totalCrewExecuted = dailyLogs.reduce((sum, log) => sum + (Number(log.executed_today) || 0), 0);
+
+  styleTitle(
+    sheet,
+    'Informe de Reportes Diarios',
+    `Exportado: ${exportedAt} | Reportes agrupados por jornada`,
+    'O',
+    logoImageId
+  );
+  addKpiBlock(sheet, [
+    { label: 'Reportes', value: dailyLogs.length, color: COLORS.primary },
+    { label: 'Ejec. cuadrilla', value: totalCrewExecuted.toLocaleString('es-CL'), color: COLORS.successText, fill: COLORS.successBg },
+    { label: 'Horas', value: totalHours.toLocaleString('es-CL'), color: COLORS.infoText, fill: COLORS.infoBg },
+    { label: 'Con restricción', value: logsWithRestriction, color: COLORS.dangerText, fill: COLORS.dangerBg },
+  ]);
+
+  sheet.getRow(headerRowNumber).values = [
+    'Fecha',
+    'Proyecto',
+    'Torre',
+    'Piso',
+    'Actividad',
+    'Supervisor',
+    'Total cuadrilla',
+    'Horas',
+    'Restricción',
+    'Observación',
+    'Trabajador',
+    'Cargo',
+    'Ejec. Hoy',
+    'Horas ind.',
+    'Validacion',
+  ];
+  styleHeader(sheet.getRow(headerRowNumber));
 
   dailyLogs.forEach((log) => {
-    const masterItem = masterItems.find(mi => String(mi.id) === String(log.master_item_id));
-    
-    const project = log.project || masterItem?.project || '';
-    const tower = log.tower || masterItem?.tower || '';
-    const floor = log.floor || masterItem?.floor || '';
-    const activity = log.activity || masterItem?.activity || '';
+    const { project, tower, floor, activity } = getMasterContext(masterItems, log);
+    const workers = parseWorkers(log.crew_workers);
+    const crewTotal = Number(log.executed_today) || 0;
+    const workerExecutedTotal = workers.reduce((sum, worker) => sum + (Number(worker.executed) || 0), 0);
+    const hasWorkerDetail = workers.length > 0;
+    const hasMismatch = hasWorkerDetail && Math.abs(workerExecutedTotal - crewTotal) > 0.001;
+    const validationMessage = hasMismatch
+      ? `Diferencia: cuadrilla ${crewTotal} vs trabajadores ${workerExecutedTotal}`
+      : 'OK';
 
-    const row = logSheet.addRow({
+    const reportRow = sheet.addRow(sanitizeRowValues({
       date: log.date || '',
-      project: project,
-      tower: tower,
-      floor: floor,
-      activity: activity,
+      project,
+      tower,
+      floor,
+      activity,
       supervisor: log.supervisor || '',
-      worker: '(Total Cuadrilla)',
-      role: '',
-      executed: Number(log.executed_today) || 0,
+      crewTotal,
       hours: Number(log.hours_worked) || 0,
       hasRestriction: log.has_restriction ? 'Sí' : 'No',
-      restrictionDetail: log.restriction_detail || '',
-      observations: log.observations || '',
-    });
+      observations: log.has_restriction
+        ? [log.restriction_detail, log.observations].filter(Boolean).join('\n')
+        : log.observations || '',
+      worker: '',
+      role: '',
+      workerExecuted: workerExecutedTotal,
+      workerHours: workers.reduce((sum, worker) => sum + (Number(worker.hours) || 0), 0),
+      validation: hasWorkerDetail ? validationMessage : 'Sin detalle',
+    }));
 
-    row.font = { bold: true };
-    row.getCell('executed').numFmt = '#,##0';
-    row.getCell('hours').numFmt = '#,##0';
-    row.getCell('date').numFmt = 'dd/mm/yyyy';
+    reportRow.getCell('date').numFmt = 'dd/mm/yyyy';
+    reportRow.getCell('crewTotal').numFmt = '#,##0.##';
+    reportRow.getCell('hours').numFmt = '#,##0.##';
+    reportRow.getCell('workerExecuted').numFmt = '#,##0.##';
+    reportRow.getCell('workerHours').numFmt = '#,##0.##';
+    styleReportRow(reportRow, hasMismatch);
 
     if (log.has_restriction) {
-      const restrictionCell = row.getCell('hasRestriction');
-      restrictionCell.fill = /** @type {import('exceljs').FillPattern} */ ({
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFFEE2E2' },
-      });
-      restrictionCell.font = /** @type {Partial<import('exceljs').Font>} */ ({ color: { argb: 'FFB91C1C' }, bold: true });
+      const restrictionCell = reportRow.getCell('hasRestriction');
+      restrictionCell.fill = solidFill(COLORS.dangerBg);
+      restrictionCell.font = { color: { argb: COLORS.dangerText }, bold: true };
     }
 
-    let crewWorkers = [];
-    if (Array.isArray(log.crew_workers)) {
-      crewWorkers = log.crew_workers;
-    } else if (typeof log.crew_workers === 'string') {
-      try { crewWorkers = JSON.parse(log.crew_workers); } catch (e) {}
+    if (hasMismatch) {
+      const validationCell = reportRow.getCell('validation');
+      validationCell.fill = solidFill(COLORS.dangerBg);
+      validationCell.font = { color: { argb: COLORS.dangerText }, bold: true };
     }
 
-    if (crewWorkers?.length) {
-      crewWorkers.forEach((worker) => {
-        const crewRow = logSheet.addRow({
-          date: log.date || '',
-          project: project,
-          tower: tower,
-          floor: floor,
-          activity: '',
-          supervisor: '',
-          worker: `  └ ${worker.name || ''}`,
-          role: worker.role || '',
-          executed: Number(worker.executed) || 0,
-          hours: Number(worker.hours) || 0,
-          hasRestriction: '',
-          restrictionDetail: '',
-          observations: '',
-        });
-        crewRow.font = { italic: true, color: { argb: 'FF475569' } };
-      });
-    }
+    workers.forEach((worker) => {
+      const workerRow = sheet.addRow(sanitizeRowValues({
+        date: '',
+        project: '',
+        tower: '',
+        floor: '',
+        activity: '',
+        supervisor: '',
+        crewTotal: '',
+        hours: '',
+        hasRestriction: '',
+        observations: '',
+        worker: worker.name || '',
+        role: worker.role || '',
+        workerExecuted: Number(worker.executed) || 0,
+        workerHours: Number(worker.hours) || 0,
+        validation: '',
+      }));
+
+      workerRow.getCell('workerExecuted').numFmt = '#,##0.##';
+      workerRow.getCell('workerHours').numFmt = '#,##0.##';
+      styleWorkerRow(workerRow);
+    });
   });
 
-  logSheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: 13 } };
-  styleSheetRows(logSheet, 4);
-  logSheet.properties.tabColor = { argb: '2563EB' };
+  const lastRow = sheet.lastRow.number;
+  sheet.autoFilter = { from: { row: headerRowNumber, column: 1 }, to: { row: lastRow, column: 15 } };
+  sheet.views = [{ state: 'frozen', ySplit: headerRowNumber }];
+
+  applyAutoFit(sheet, {
+    1: { min: 11, max: 14 },
+    2: { min: 16, max: 25 },
+    3: { min: 9, max: 12 },
+    4: { min: 9, max: 14 },
+    5: { min: 20, max: 34 },
+    6: { min: 16, max: 24 },
+    7: { min: 11, max: 14 },
+    8: { min: 9, max: 11 },
+    9: { min: 12, max: 14 },
+    10: { min: 20, max: 34 },
+    11: { min: 18, max: 28 },
+    12: { min: 14, max: 22 },
+    13: { min: 11, max: 14 },
+    14: { min: 10, max: 13 },
+    15: { min: 14, max: 24 },
+  });
+
+  for (let rowNumber = headerRowNumber + 1; rowNumber <= lastRow; rowNumber += 1) {
+    capRowHeight(sheet.getRow(rowNumber), 52);
+  }
+
+  sheet.properties.tabColor = { argb: COLORS.infoText };
+}
+
+export async function exportReportExcel(masterItems, dailyLogs) {
+  const workbook = new ExcelJS.Workbook();
+  const exportedAt = format(new Date(), 'dd MMM yyyy HH:mm', { locale: es });
+
+  workbook.creator = 'Control de Obras DGC';
+  workbook.company = 'DGC';
+  workbook.subject = 'Informe de control de obras';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const logoImageId = await loadLogoImageId(workbook);
+
+  addMasterSheet(workbook, masterItems, logoImageId, exportedAt);
+  addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exportedAt);
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

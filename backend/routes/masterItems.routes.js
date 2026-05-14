@@ -13,6 +13,15 @@ function stringifyArray(value) {
   return value;
 }
 
+function getFloorValues(floor) {
+  const floors = String(floor || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return floors.length > 0 ? floors : [""];
+}
+
 router.get("/", (req, res) => {
   db.all("SELECT * FROM master_items ORDER BY id DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -77,10 +86,30 @@ router.post("/", (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  const values = [
+  const buildItem = (id, floorValue) => ({
+    id,
+    project: project || "",
+    tower: tower || "",
+    floor: floorValue,
+    activity: activity || "",
+    start_date: start_date || "",
+    end_date: end_date || "",
+    planned_qty: toNumber(planned_qty),
+    executed_qty: toNumber(executed_qty),
+    unit: unit || "",
+    crew_name: crew_name || "",
+    crew_size: toNumber(crew_size),
+    crew_members: stringifyArray(crew_members),
+    restrictions: restrictions || "",
+    observations: observations || "",
+    status: status || "pendiente",
+    release_status: release_status || "no_liberado",
+  });
+
+  const buildValues = (floorValue) => [
     project || "",
     tower || "",
-    floor || "",
+    floorValue,
     activity || "",
     start_date || "",
     end_date || "",
@@ -96,28 +125,40 @@ router.post("/", (req, res) => {
     release_status || "no_liberado",
   ];
 
-  db.run(sql, values, function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+  const floorValues = getFloorValues(floor);
+  const createdItems = [];
 
-    res.status(201).json({
-      id: this.lastID,
-      project: project || "",
-      tower: tower || "",
-      floor: floor || "",
-      activity: activity || "",
-      start_date: start_date || "",
-      end_date: end_date || "",
-      planned_qty: toNumber(planned_qty),
-      executed_qty: toNumber(executed_qty),
-      unit: unit || "",
-      crew_name: crew_name || "",
-      crew_size: toNumber(crew_size),
-      crew_members: stringifyArray(crew_members),
-      restrictions: restrictions || "",
-      observations: observations || "",
-      status: status || "pendiente",
-      release_status: release_status || "no_liberado",
-    });
+  db.serialize(() => {
+    const statement = db.prepare(sql);
+
+    const insertNext = (index) => {
+      if (index >= floorValues.length) {
+        statement.finalize((err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          const firstItem = createdItems[0] || buildItem(null, "");
+          return res.status(201).json({
+            ...firstItem,
+            created_items: createdItems,
+          });
+        });
+        return;
+      }
+
+      const floorValue = floorValues[index];
+
+      statement.run(buildValues(floorValue), function (err) {
+        if (err) {
+          statement.finalize(() => {});
+          return res.status(500).json({ error: err.message });
+        }
+
+        createdItems.push(buildItem(this.lastID, floorValue));
+        insertNext(index + 1);
+      });
+    };
+
+    insertNext(0);
   });
 });
 

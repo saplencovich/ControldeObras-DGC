@@ -5,7 +5,6 @@ import { Link, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Camera, FileText, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -14,6 +13,7 @@ import DailyLogTable from '../components/detail/DailyLogTable';
 import WorkerProductivity from '../components/detail/WorkerProductivity';
 import PhotoGallery from '../components/detail/PhotoGallery';
 import DailyLogForm from '../components/forms/DailyLogForm';
+import ItemScopeSummary from '../components/common/ItemScopeSummary';
 
 function ItemDetailSkeleton() {
   return (
@@ -222,11 +222,9 @@ export default function ItemDetail() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-lg font-bold">Detalle del Ítem</h1>
-          <p className="text-xs text-muted-foreground">
-            {item.project} — {item.tower} — {item.floor} — {item.activity}
-          </p>
+          <ItemScopeSummary item={item} />
         </div>
       </div>
 
