@@ -113,9 +113,12 @@ export default function MasterPlan() {
   });
 
   const filteredItemIds = new Set(filteredItems.map((item) => Number(item.id)));
-  const filteredLogs = dailyLogs.filter((log) =>
-    filteredItemIds.has(Number(log.master_item_id))
-  );
+  const filteredLogs = dailyLogs.filter((log) => {
+    if (!filteredItemIds.has(Number(log.master_item_id))) return false;
+    if (filters.floor && log.floor !== filters.floor) return false;
+
+    return true;
+  });
 
   const handleSaveItem = async (data) => {
     if (editItem) {
