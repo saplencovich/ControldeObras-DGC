@@ -71,6 +71,30 @@ function normalizeRelease(value) {
   return normalizeStatus(value);
 }
 
+function sanitizeExcelText(value) {
+  return String(value ?? '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .slice(0, 32767);
+}
+
+function sanitizeExcelValue(value) {
+  if (typeof value === 'string') return sanitizeExcelText(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (Array.isArray(value)) return value.map(sanitizeExcelValue);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sanitizeExcelValue(item)])
+    );
+  }
+  return value ?? '';
+}
+
+function sanitizeRowValues(values) {
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, sanitizeExcelValue(value)])
+  );
+}
+
 function parseWorkers(rawWorkers) {
   if (Array.isArray(rawWorkers)) return rawWorkers;
   if (typeof rawWorkers === 'string' && rawWorkers.trim()) {
@@ -287,28 +311,6 @@ function addProgressBars(sheet, startRow, endRow, columnLetter) {
   });
 }
 
-function addExcelTable(sheet, name, headerRow, lastRow, lastColumn) {
-  if (lastRow <= headerRow) return;
-
-  sheet.addTable({
-    name,
-    ref: `A${headerRow}`,
-    headerRow: true,
-    totalsRow: false,
-    style: {
-      theme: 'TableStyleMedium2',
-      showRowStripes: false,
-    },
-    columns: sheet.getRow(headerRow).values.slice(1, lastColumn + 1).map((header) => ({
-      name: String(header || ''),
-      filterButton: true,
-    })),
-    rows: Array.from({ length: lastRow - headerRow }, (_, rowIndex) =>
-      sheet.getRow(headerRow + 1 + rowIndex).values.slice(1, lastColumn + 1)
-    ),
-  });
-}
-
 function addMasterSheet(workbook, masterItems, logoImageId, exportedAt) {
   const sheet = workbook.addWorksheet('Plan Maestro', {
     properties: { defaultRowHeight: 24, outlineLevelRow: 1 },
@@ -379,7 +381,7 @@ function addMasterSheet(workbook, masterItems, logoImageId, exportedAt) {
     const planned = Number(item.planned_qty) || 0;
     const executed = Number(item.executed_qty) || 0;
     const pct = planned > 0 ? Number(((executed / planned) * 100).toFixed(1)) : 0;
-    const row = sheet.addRow({
+    const row = sheet.addRow(sanitizeRowValues({
       project: item.project || '',
       tower: item.tower || '',
       floor: summarizeFloors(item.floor),
@@ -392,7 +394,7 @@ function addMasterSheet(workbook, masterItems, logoImageId, exportedAt) {
       release: normalizeRelease(item.release_status),
       restrictions: item.restrictions || '',
       observations: item.observations || '',
-    });
+    }));
 
     row.getCell('planned').numFmt = '#,##0';
     row.getCell('executed').numFmt = '#,##0';
@@ -413,7 +415,6 @@ function addMasterSheet(workbook, masterItems, logoImageId, exportedAt) {
 
   sheet.autoFilter = { from: { row: headerRowNumber, column: 1 }, to: { row: headerRowNumber, column: 12 } };
   addProgressBars(sheet, headerRowNumber + 1, lastRow, 'H');
-  addExcelTable(sheet, 'TablaPlanMaestro', headerRowNumber, lastRow, 12);
   applyAutoFit(sheet, {
     1: { min: 16, max: 26 },
     2: { min: 10, max: 14 },
@@ -447,7 +448,6 @@ function styleReportRow(row, hasError) {
 }
 
 function styleWorkerRow(row) {
-  row.outlineLevel = 1;
   row.font = { italic: true, color: { argb: COLORS.mutedText }, size: 10 };
   row.height = 23;
 
@@ -463,9 +463,8 @@ function styleWorkerRow(row) {
 
 function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exportedAt) {
   const sheet = workbook.addWorksheet('Reportes Diarios', {
-    properties: { defaultRowHeight: 24, outlineLevelRow: 1 },
-    views: [{ state: 'frozen', ySplit: 6, xSplit: 2 }],
-    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    properties: { defaultRowHeight: 24 },
+    views: [{ state: 'frozen', ySplit: 6 }],
   });
 
   sheet.columns = [
@@ -535,7 +534,7 @@ function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exporte
       ? `Diferencia: cuadrilla ${crewTotal} vs trabajadores ${workerExecutedTotal}`
       : 'OK';
 
-    const reportRow = sheet.addRow({
+    const reportRow = sheet.addRow(sanitizeRowValues({
       date: log.date || '',
       project,
       tower,
@@ -553,7 +552,7 @@ function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exporte
       workerExecuted: workerExecutedTotal,
       workerHours: workers.reduce((sum, worker) => sum + (Number(worker.hours) || 0), 0),
       validation: hasWorkerDetail ? validationMessage : 'Sin detalle',
-    });
+    }));
 
     reportRow.getCell('date').numFmt = 'dd/mm/yyyy';
     reportRow.getCell('crewTotal').numFmt = '#,##0.##';
@@ -570,13 +569,12 @@ function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exporte
 
     if (hasMismatch) {
       const validationCell = reportRow.getCell('validation');
-      validationCell.note = `La suma ejecutada por trabajadores (${workerExecutedTotal}) no coincide con el total de cuadrilla (${crewTotal}).`;
       validationCell.fill = solidFill(COLORS.dangerBg);
       validationCell.font = { color: { argb: COLORS.dangerText }, bold: true };
     }
 
     workers.forEach((worker) => {
-      const workerRow = sheet.addRow({
+      const workerRow = sheet.addRow(sanitizeRowValues({
         date: '',
         project: '',
         tower: '',
@@ -592,7 +590,7 @@ function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exporte
         workerExecuted: Number(worker.executed) || 0,
         workerHours: Number(worker.hours) || 0,
         validation: '',
-      });
+      }));
 
       workerRow.getCell('workerExecuted').numFmt = '#,##0.##';
       workerRow.getCell('workerHours').numFmt = '#,##0.##';
@@ -601,9 +599,8 @@ function addDailyLogSheet(workbook, masterItems, dailyLogs, logoImageId, exporte
   });
 
   const lastRow = sheet.lastRow.number;
-  sheet.autoFilter = { from: { row: headerRowNumber, column: 1 }, to: { row: headerRowNumber, column: 15 } };
-  sheet.views = [{ state: 'frozen', ySplit: headerRowNumber, xSplit: 2 }];
-  sheet.properties.outlineProperties = { summaryBelow: false, summaryRight: false };
+  sheet.autoFilter = { from: { row: headerRowNumber, column: 1 }, to: { row: lastRow, column: 15 } };
+  sheet.views = [{ state: 'frozen', ySplit: headerRowNumber }];
 
   applyAutoFit(sheet, {
     1: { min: 11, max: 14 },

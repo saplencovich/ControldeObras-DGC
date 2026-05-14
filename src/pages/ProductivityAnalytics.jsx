@@ -6,7 +6,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { TrendingUp, Users, Activity, Zap } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
-import { format, parse, isBefore, isAfter } from 'date-fns';
+import { format, parse } from 'date-fns';
 
 export default function ProductivityAnalytics() {
   const { hasAccessToProject, userRole } = usePermissions();

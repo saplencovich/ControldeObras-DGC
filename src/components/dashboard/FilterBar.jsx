@@ -12,7 +12,6 @@ import {
   Search,
   Plus,
   Download,
-  Upload,
   RefreshCw,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -206,14 +205,6 @@ export default function FilterBar({
           Exportar Excel
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-        >
-          <Upload className="h-3 w-3" />
-          Importar CSV
-        </Button>
 
         <Button
           variant="ghost"
