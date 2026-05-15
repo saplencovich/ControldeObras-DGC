@@ -74,7 +74,6 @@ const INITIAL_FORM = {
   start_date: "",
   end_date: "",
   planned_qty: "",
-  executed_qty: 0,
   unit: "und",
   crew_name: "",
   status: "pendiente",
@@ -93,7 +92,6 @@ function getFormFromEditItem(editItem) {
     start_date: editItem.start_date || "",
     end_date: editItem.end_date || "",
     planned_qty: editItem.planned_qty ?? "",
-    executed_qty: editItem.executed_qty ?? 0,
     unit: editItem.unit || "und",
     crew_name: editItem.crew_name || "",
     status: editItem.status || "pendiente",
@@ -216,14 +214,6 @@ export default function MasterItemForm({
       return "Debe ingresar una cantidad planificada mayor a 0.";
     }
 
-    if (Number(form.executed_qty || 0) < 0) {
-      return "La cantidad ejecutada no puede ser negativa.";
-    }
-
-    if (Number(form.executed_qty || 0) > Number(form.planned_qty || 0)) {
-      return "La cantidad ejecutada no puede ser mayor a la cantidad planificada.";
-    }
-
     return "";
   };
 
@@ -242,7 +232,6 @@ export default function MasterItemForm({
       floor: form.floors && form.floors.length > 0 ? form.floors.join(", ") : "",
       activity: form.activity.trim(),
       planned_qty: Number(form.planned_qty || 0),
-      executed_qty: Number(form.executed_qty || 0),
       unit: form.unit.trim() || "und",
       crew_name: form.crew_name.trim(),
       restrictions: form.restrictions.trim(),
@@ -446,18 +435,6 @@ export default function MasterItemForm({
                 value={form.planned_qty}
                 onChange={(e) =>
                   updateFormField("planned_qty", e.target.value)
-                }
-              />
-            </div>
-
-            <div>
-              <Label className="text-xs">Ejecutado</Label>
-              <Input
-                type="number"
-                min="0"
-                value={form.executed_qty}
-                onChange={(e) =>
-                  updateFormField("executed_qty", e.target.value)
                 }
               />
             </div>
