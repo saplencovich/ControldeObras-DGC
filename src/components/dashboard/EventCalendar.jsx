@@ -41,14 +41,14 @@ function getEventIcon(type) {
   return <ClipboardList className="h-3 w-3 shrink-0" />;
 }
 
-function EventDetailCard({ event, onClose }) {
+function EventDetailCard({ event, onClose, showClose = true, className }) {
   if (!event) return null;
 
   const detail = event.detail || {};
   const isActivity = event.type === 'start' || event.type === 'end';
 
   return (
-    <div className="rounded-lg border bg-card p-3 shadow-sm">
+    <div className={cn('rounded-lg border bg-card p-3 shadow-sm', className)}>
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-1.5">
@@ -62,9 +62,11 @@ function EventDetailCard({ event, onClose }) {
           </p>
         </div>
 
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        {showClose && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-2 text-xs sm:grid-cols-2">
@@ -159,49 +161,61 @@ function EventDetailCard({ event, onClose }) {
 function DayEventsPanel({ selectedDay, selectedEvent, onSelectEvent, onClose }) {
   if (!selectedDay) return null;
 
+  const activeEvent = selectedEvent || selectedDay.events[0];
+
   return (
-    <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(260px,0.85fr)_minmax(320px,1.15fr)]">
-      <div className="rounded-lg border bg-card p-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold">
-              Eventos del {format(selectedDay.date, 'd MMM yyyy', { locale: es })}
-            </p>
-            <p className="text-xs text-muted-foreground">{selectedDay.events.length} eventos</p>
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-            <X className="h-3.5 w-3.5" />
-          </Button>
+    <div className="absolute left-1 right-1 top-1 z-20 max-h-[calc(100%-0.5rem)] overflow-y-auto rounded-lg border bg-background p-3 shadow-xl sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-3 border-b pb-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            Eventos del {format(selectedDay.date, 'd MMM yyyy', { locale: es })}
+          </p>
+          <p className="text-xs text-muted-foreground">{selectedDay.events.length} eventos programados</p>
         </div>
 
-        <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
-          {selectedDay.events.map((event) => (
-            <button
-              key={event.id}
-              type="button"
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition hover:bg-muted',
-                selectedEvent?.id === event.id && 'border-accent bg-accent/10'
-              )}
-              onClick={() => onSelectEvent(event)}
-            >
-              <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded text-white', event.color)}>
-                {getEventIcon(event.type)}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{event.label}</span>
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  {[event.detail?.tower, event.detail?.floor, event.detail?.crew || event.detail?.supervisor]
-                    .filter(Boolean)
-                    .join(' / ')}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
       </div>
 
-      <EventDetailCard event={selectedEvent || selectedDay.events[0]} onClose={onClose} />
+      <div className="grid gap-3 lg:grid-cols-[minmax(240px,0.85fr)_minmax(300px,1.15fr)]">
+        <div className="rounded-lg border bg-card p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Listado</p>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {selectedDay.events.length}
+            </span>
+          </div>
+
+          <div className="max-h-[340px] space-y-1 overflow-y-auto pr-1">
+            {selectedDay.events.map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition hover:bg-muted',
+                  selectedEvent?.id === event.id && 'border-accent bg-accent/10'
+                )}
+                onClick={() => onSelectEvent(event)}
+              >
+                <span className={cn('inline-flex h-5 w-5 items-center justify-center rounded text-white', event.color)}>
+                  {getEventIcon(event.type)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{event.label}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {[event.detail?.tower, event.detail?.floor, event.detail?.crew || event.detail?.supervisor]
+                      .filter(Boolean)
+                      .join(' / ')}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <EventDetailCard event={activeEvent} onClose={onClose} showClose={false} className="h-fit" />
+      </div>
     </div>
   );
 }
@@ -413,26 +427,27 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
       </CardHeader>
 
       <CardContent>
-        <div className="-mx-1 overflow-x-auto px-1">
-        <div className="grid min-w-[620px] grid-cols-7 gap-px overflow-hidden rounded-lg bg-border">
-          {dayNames.map((dayName) => (
-            <div
-              key={dayName}
-              className="bg-muted p-2 text-center text-xs font-medium text-muted-foreground"
-            >
-              {dayName}
-            </div>
-          ))}
+        <div className="relative">
+          <div className="-mx-1 overflow-x-auto px-1">
+            <div className="grid min-w-[620px] grid-cols-7 gap-px overflow-hidden rounded-lg bg-border">
+              {dayNames.map((dayName) => (
+                <div
+                  key={dayName}
+                  className="bg-muted p-2 text-center text-xs font-medium text-muted-foreground"
+                >
+                  {dayName}
+                </div>
+              ))}
 
-          {Array.from({ length: startDayOfWeek }).map((_, index) => (
-            <div key={`empty-${index}`} className="min-h-[82px] sm:min-h-[100px] bg-card p-1.5 sm:p-2" />
-          ))}
+              {Array.from({ length: startDayOfWeek }).map((_, index) => (
+                <div key={`empty-${index}`} className="min-h-[82px] sm:min-h-[100px] bg-card p-1.5 sm:p-2" />
+              ))}
 
-          {days.map((day) => {
-            const events = getEventsForDay(day);
-            const isToday = isSameDay(day, new Date());
+              {days.map((day) => {
+                const events = getEventsForDay(day);
+                const isToday = isSameDay(day, new Date());
 
-            return (
+                return (
               <div
                 key={day.toISOString()}
                 className={`min-h-[82px] sm:min-h-[100px] bg-card p-1 sm:p-1.5 ${
@@ -469,20 +484,21 @@ export default function EventCalendar({ masterItems = [], dailyLogs = [] }) {
                   )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-        </div>
+                );
+              })}
+            </div>
+          </div>
 
-        <DayEventsPanel
-          selectedDay={selectedDay}
-          selectedEvent={selectedEvent}
-          onSelectEvent={setSelectedEvent}
-          onClose={() => {
-            setSelectedDay(null);
-            setSelectedEvent(null);
-          }}
-        />
+          <DayEventsPanel
+            selectedDay={selectedDay}
+            selectedEvent={selectedEvent}
+            onSelectEvent={setSelectedEvent}
+            onClose={() => {
+              setSelectedDay(null);
+              setSelectedEvent(null);
+            }}
+          />
+        </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
