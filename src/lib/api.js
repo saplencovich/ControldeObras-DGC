@@ -1,9 +1,20 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const STORAGE_KEY = "dgc-auth-user";
+
+function getAuthHeaders() {
+  try {
+    const user = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    return user.email ? { "x-user-email": user.email } : {};
+  } catch {
+    return {};
+  }
+}
 
 async function request(endpoint, options = {}) {
   const response = await fetch(`${API_URL}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
       ...options.headers,
     },
     ...options,

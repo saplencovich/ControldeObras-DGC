@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, LockKeyhole, LogIn, UserRound } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/AuthContext';
 
-const demoAccess = [
-  { role: 'Admin', username: 'admin', password: 'admin123' },
-  { role: 'Supervisor', username: 'supervisor', password: 'super123' },
-  { role: 'Visita', username: 'visita', password: 'visita123' },
-];
-
 export default function Login() {
   const { authError, isAuthenticated, isLoading, login } = useAuth();
-  const [formData, setFormData] = useState({ username: '', password: '' });
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,8 +47,7 @@ export default function Login() {
                 Acceso seguro para controlar avance, personal y restricciones.
               </h1>
               <p className="mt-4 max-w-lg text-sm leading-6 text-primary-foreground/70">
-                El inicio de sesion queda preparado para separar permisos por rol
-                y conectar luego con usuarios reales desde backend.
+                Ingresa con tu correo y contraseña para acceder al sistema.
               </p>
             </div>
           </div>
@@ -70,33 +63,34 @@ export default function Login() {
               />
               <div>
                 <h1 className="text-base font-semibold">Control de Obras</h1>
-                <p className="text-xs text-muted-foreground">Obra Electrica</p>
+                <p className="text-xs text-muted-foreground">Obra Eléctrica</p>
               </div>
             </div>
 
             <div className="rounded-lg border bg-card p-6 shadow-sm sm:p-8">
               <div className="mb-6">
-                <h2 className="text-2xl font-semibold">Iniciar sesion</h2>
+                <h2 className="text-2xl font-semibold">Iniciar sesión</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Ingresa con tu usuario y contrasena para continuar.
+                  Ingresa con tu correo y contraseña para continuar.
                 </p>
               </div>
 
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div className="space-y-2">
-                  <Label htmlFor="username">Usuario</Label>
+                  <Label htmlFor="email">Correo electrónico</Label>
                   <div className="relative">
-                    <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      id="username"
-                      autoComplete="username"
+                      id="email"
+                      type="email"
+                      autoComplete="email"
                       className="h-11 pl-9"
-                      placeholder="admin"
-                      value={formData.username}
+                      placeholder="correo@dgc.cl"
+                      value={formData.email}
                       onChange={(event) =>
                         setFormData((current) => ({
                           ...current,
-                          username: event.target.value,
+                          email: event.target.value,
                         }))
                       }
                       required
@@ -105,14 +99,14 @@ export default function Login() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Contrasena</Label>
+                  <Label htmlFor="password">Contraseña</Label>
                   <div className="relative">
                     <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="password"
                       autoComplete="current-password"
                       className="h-11 px-9"
-                      placeholder="admin123"
+                      placeholder="••••••••"
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
                       onChange={(event) =>
@@ -129,7 +123,7 @@ export default function Login() {
                       size="icon"
                       className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground"
                       onClick={() => setShowPassword((current) => !current)}
-                      aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                     >
                       {showPassword ? <EyeOff /> : <Eye />}
                     </Button>
@@ -147,25 +141,6 @@ export default function Login() {
                   {isLoading ? 'Validando...' : 'Entrar'}
                 </Button>
               </form>
-
-              <div className="mt-6 border-t pt-5">
-                <p className="mb-3 text-xs font-medium uppercase text-muted-foreground">
-                  Usuarios de prueba
-                </p>
-                <div className="grid gap-2 text-xs text-muted-foreground">
-                  {demoAccess.map((access) => (
-                    <div
-                      key={access.username}
-                      className="flex items-center justify-between rounded-md bg-muted px-3 py-2"
-                    >
-                      <span className="font-medium text-foreground">{access.role}</span>
-                      <span>
-                        {access.username} / {access.password}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </section>

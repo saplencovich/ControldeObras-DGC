@@ -2,36 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = 'dgc-auth-user';
-
-const DEMO_USERS = [
-  {
-    id: 1,
-    username: 'admin',
-    password: 'admin123',
-    full_name: 'Administrador DGC',
-    email: 'admin@dgc.cl',
-    role: 'admin',
-    allowed_projects: [],
-  },
-  {
-    id: 2,
-    username: 'supervisor',
-    password: 'super123',
-    full_name: 'Supervisor de Obra',
-    email: 'supervisor@dgc.cl',
-    role: 'supervisor',
-    allowed_projects: [],
-  },
-  {
-    id: 3,
-    username: 'visita',
-    password: 'visita123',
-    full_name: 'Usuario Visita',
-    email: 'visita@dgc.cl',
-    role: 'viewer',
-    allowed_projects: [],
-  },
-];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -49,32 +20,32 @@ export function AuthProvider({ children }) {
     setIsLoadingAuth(false);
   }, []);
 
-  const login = async ({ username, password }) => {
+  const login = async ({ email, password }) => {
     try {
       setIsLoading(true);
       setAuthError(null);
 
-      const normalizedUsername = username.trim().toLowerCase();
-      const foundUser = DEMO_USERS.find(
-        (demoUser) =>
-          demoUser.username === normalizedUsername &&
-          demoUser.password === password
-      );
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
 
-      if (!foundUser) {
-        throw new Error('Credenciales invalidas');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Credenciales inválidas.');
       }
 
-      const { password: _password, ...authenticatedUser } = foundUser;
-      setUser(authenticatedUser);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
+      setUser(data);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-      return authenticatedUser;
+      return data;
     } catch (error) {
       console.error('Error en login:', error);
       setAuthError({
         type: 'invalid_credentials',
-        message: 'Usuario o contrasena incorrectos.',
+        message: error.message || 'Usuario o contraseña incorrectos.',
       });
       return null;
     } finally {
