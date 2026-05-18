@@ -51,6 +51,12 @@ export default function ItemDetail() {
 
   const item = allItems.find((masterItem) => String(masterItem.id) === String(itemId));
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get('/projects'),
+    ...queryOptions,
+  });
+
   const { data: logs = [] } = useQuery({
     queryKey: ['dailyLogs', itemId],
     queryFn: () => api.get(`/daily-logs?master_item_id=${encodeURIComponent(itemId)}`),
@@ -183,6 +189,8 @@ export default function ItemDetail() {
     (photo) => String(photo.master_item_id) === String(itemId)
   );
 
+  const projectSupervisor =
+    projects.find((project) => project.name === item.project)?.supervisor || '';
 
   const totalExecutedInLogs = scopedLogs.reduce(
     (sum, log) => sum + (Number(log.executed_today) || 0),
@@ -229,7 +237,7 @@ export default function ItemDetail() {
           </div>
           <Button 
             variant="outline" 
-            onClick={() => exportReportPDF([item], scopedLogs, scopedPhotos, [], user?.full_name)}
+            onClick={() => exportReportPDF([item], scopedLogs, scopedPhotos, [], projectSupervisor)}
           >
             Exportar PDF
           </Button>
