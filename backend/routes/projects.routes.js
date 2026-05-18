@@ -170,56 +170,82 @@ router.put("/:id", (req, res) => {
       });
     }
 
-    const sql = `
-      UPDATE projects
-      SET
-        name = ?,
-        client = ?,
-        address = ?,
-        description = ?,
-        status = ?,
-        start_date = ?,
-        end_date = ?,
-        supervisor = ?,
-        capataz = ?
-      WHERE id = ?
-    `;
+    db.get("SELECT * FROM projects WHERE id = ?", [id], (err, currentProject) => {
+      if (err) return res.status(500).json({ error: err.message });
 
-    db.run(
-      sql,
-      [
-        projectName,
-        client || "",
-        projectAddress,
-        description || "",
-        normalizeStatus(status),
-        start_date || "",
-        end_date || "",
-        supervisor || "",
-        capataz || "",
-        id,
-      ],
-      function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-
-        if (this.changes === 0) {
-          return res.status(404).json({ error: "Obra no encontrada" });
-        }
-
-        res.json({
-          id: Number(id),
-          name: projectName,
-          client: client || "",
-          address: projectAddress,
-          description: description || "",
-          status: normalizeStatus(status),
-          start_date: start_date || "",
-          end_date: end_date || "",
-          supervisor: supervisor || "",
-          capataz: capataz || "",
-        });
+      if (!currentProject) {
+        return res.status(404).json({ error: "Obra no encontrada" });
       }
-    );
+
+      const sql = `
+        UPDATE projects
+        SET
+          name = ?,
+          client = ?,
+          address = ?,
+          description = ?,
+          status = ?,
+          start_date = ?,
+          end_date = ?,
+          supervisor = ?,
+          capataz = ?
+        WHERE id = ?
+      `;
+
+      db.serialize(() => {
+        db.run(
+          sql,
+          [
+            projectName,
+            client || "",
+            projectAddress,
+            description || "",
+            normalizeStatus(status),
+            start_date || "",
+            end_date || "",
+            supervisor || "",
+            capataz || "",
+            id,
+          ],
+          function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            if (this.changes === 0) {
+              return res.status(404).json({ error: "Obra no encontrada" });
+            }
+
+            db.run(
+              "UPDATE master_items SET project = ? WHERE project = ?",
+              [projectName, currentProject.name],
+              (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                db.run(
+                  "UPDATE daily_logs SET project = ? WHERE project = ?",
+                  [projectName, currentProject.name],
+                  (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
+
+                    res.json({
+                      id: Number(id),
+                      name: projectName,
+                      client: client || "",
+                      address: projectAddress,
+                      description: description || "",
+                      status: normalizeStatus(status),
+                      start_date: start_date || "",
+                      end_date: end_date || "",
+                      supervisor: supervisor || "",
+                      capataz: capataz || "",
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+      });
+    });
   });
 });
 

@@ -31,6 +31,7 @@ export default function MasterPlan() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showDailyLog, setShowDailyLog] = useState(false);
+  const [editProject, setEditProject] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [dailyLogItem, setDailyLogItem] = useState(null);
 
@@ -62,6 +63,24 @@ export default function MasterPlan() {
     mutationFn: (data) => api.post('/projects', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  const updateProject = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/projects/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['masterItems'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyLogs'] });
+    },
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: (id) => api.delete(`/projects/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['masterItems'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyLogs'] });
     },
   });
 
@@ -115,7 +134,7 @@ export default function MasterPlan() {
   const filteredItemIds = new Set(filteredItems.map((item) => Number(item.id)));
   const filteredLogs = dailyLogs.filter((log) => {
     if (!filteredItemIds.has(Number(log.master_item_id))) return false;
-    if (filters.floor && log.floor !== filters.floor) return false;
+    if (!itemHasFloor(log.floor, filters.floor)) return false;
 
     return true;
   });
@@ -127,6 +146,45 @@ export default function MasterPlan() {
       await createItem.mutateAsync(data);
     }
     setEditItem(null);
+  };
+
+  const handleOpenNewProject = () => {
+    setEditProject(null);
+    setShowProjectForm(true);
+  };
+
+  const handleOpenEditProject = (selectedProject) => {
+    const project =
+      selectedProject || projects.find((p) => p.name === filters.project);
+    if (!project) return;
+
+    setEditProject(project);
+    setShowProjectForm(true);
+  };
+
+  const handleSaveProject = async (data) => {
+    if (editProject) {
+      const previousName = editProject.name;
+      await updateProject.mutateAsync({ id: editProject.id, data });
+
+      if (filters.project === previousName) {
+        setFilters((prev) => ({ ...prev, project: data.name }));
+      }
+
+      setEditProject(null);
+      return;
+    }
+
+    await createProject.mutateAsync(data);
+  };
+
+  const handleDeleteProject = async (project) => {
+    await deleteProject.mutateAsync(project.id);
+    setFilters((prev) => ({
+      ...prev,
+      project: prev.project === project.name ? '' : prev.project,
+    }));
+    setEditProject(null);
   };
 
   if (isLoading) {
@@ -169,7 +227,8 @@ export default function MasterPlan() {
         masterItems={filteredItems}
         filterOptionItems={filteredMasterItems}
         dailyLogs={filteredLogs}
-        onNewProject={() => setShowProjectForm(true)}
+        onNewProject={handleOpenNewProject}
+        onEditProject={handleOpenEditProject}
         onNewItem={() => {
           setEditItem(null);
           setShowItemForm(true);
@@ -208,8 +267,13 @@ export default function MasterPlan() {
 
       <ProjectForm
         open={showProjectForm}
-        onClose={() => setShowProjectForm(false)}
-        onSave={(data) => createProject.mutateAsync(data)}
+        onClose={() => {
+          setShowProjectForm(false);
+          setEditProject(null);
+        }}
+        onSave={handleSaveProject}
+        onDelete={handleDeleteProject}
+        editProject={editProject}
       />
 
       <MasterItemForm

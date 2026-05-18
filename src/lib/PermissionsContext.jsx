@@ -7,7 +7,8 @@ export function PermissionsProvider({ children }) {
   const { user: currentUser, isLoadingAuth } = useAuth();
 
   const value = useMemo(() => {
-    const userRole = currentUser?.role || 'viewer';
+    const rawRole = String(currentUser?.role || 'viewer').trim().toLowerCase();
+    const userRole = rawRole === 'administrador' ? 'admin' : rawRole;
     const allowedProjects = currentUser?.allowed_projects || [];
 
     const isAdmin = userRole === 'admin';
