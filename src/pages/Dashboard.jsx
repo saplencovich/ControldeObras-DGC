@@ -472,6 +472,7 @@ export default function Dashboard() {
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
+        filterOptionItems={masterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
         onNewProject={handleOpenNewProject}
