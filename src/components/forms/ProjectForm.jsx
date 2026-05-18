@@ -9,6 +9,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { usePermissions } from "@/lib/PermissionsContext";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 import { AlertTriangle } from "lucide-react";
@@ -39,7 +46,18 @@ export default function ProjectForm({ open, onClose, onSave }) {
     queryFn: () => api.get("/projects"),
   });
 
-  // Modo local para poder probar sin depender todavía de permisos reales.
+  const { data: supervisors = [] } = useQuery({
+    queryKey: ["users-supervisors"],
+    queryFn: () => api.get("/users/list?role=supervisor"),
+    enabled: open,
+  });
+
+  const { data: capataces = [] } = useQuery({
+    queryKey: ["users-viewers"],
+    queryFn: () => api.get("/users/list?role=viewer"),
+    enabled: open,
+  });
+
   const isLocalMode = true;
 
   const [form, setForm] = useState({ ...INITIAL_FORM });
@@ -54,19 +72,12 @@ export default function ProjectForm({ open, onClose, onSave }) {
   }, [open]);
 
   const updateFormField = (field, value) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    if (error) {
-      setError("");
-    }
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (error) setError("");
   };
 
   const handleClose = () => {
     if (saving) return;
-
     setForm({ ...INITIAL_FORM });
     setError("");
     onClose();
@@ -97,8 +108,8 @@ export default function ProjectForm({ open, onClose, onSave }) {
         name,
         address: form.address.trim(),
         client: form.client.trim(),
-        supervisor: form.supervisor.trim(),
-        capataz: form.capataz.trim(),
+        supervisor: form.supervisor,
+        capataz: form.capataz,
         description:
           form.description.trim() ||
           [
@@ -111,7 +122,6 @@ export default function ProjectForm({ open, onClose, onSave }) {
       };
 
       await onSave(payload);
-
       setForm({ ...INITIAL_FORM });
       onClose();
     } catch (error) {
@@ -132,17 +142,13 @@ export default function ProjectForm({ open, onClose, onSave }) {
               Permiso Insuficiente
             </DialogTitle>
           </DialogHeader>
-
           <div>
             <p className="text-sm text-muted-foreground">
               Solo supervisores y administradores pueden crear nuevas obras.
             </p>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
-              Cerrar
-            </Button>
+            <Button variant="outline" onClick={handleClose}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -207,20 +213,52 @@ export default function ProjectForm({ open, onClose, onSave }) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Supervisor</Label>
-              <Input
+              <Select
                 value={form.supervisor}
-                onChange={(e) => updateFormField("supervisor", e.target.value)}
-                placeholder="Nombre del supervisor"
-              />
+                onValueChange={(v) => updateFormField("supervisor", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar supervisor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {supervisors.length === 0 ? (
+                    <SelectItem value="__none_s__" disabled>
+                      Sin supervisores registrados
+                    </SelectItem>
+                  ) : (
+                    supervisors.map((u) => (
+                      <SelectItem key={u.id} value={u.full_name}>
+                        {u.full_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
               <Label className="text-xs">Capataz</Label>
-              <Input
+              <Select
                 value={form.capataz}
-                onChange={(e) => updateFormField("capataz", e.target.value)}
-                placeholder="Nombre del capataz"
-              />
+                onValueChange={(v) => updateFormField("capataz", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar capataz" />
+                </SelectTrigger>
+                <SelectContent>
+                  {capataces.length === 0 ? (
+                    <SelectItem value="__none_c__" disabled>
+                      Sin capataces registrados
+                    </SelectItem>
+                  ) : (
+                    capataces.map((u) => (
+                      <SelectItem key={u.id} value={u.full_name}>
+                        {u.full_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -258,7 +296,6 @@ export default function ProjectForm({ open, onClose, onSave }) {
           <Button variant="outline" onClick={handleClose} disabled={saving}>
             Cancelar
           </Button>
-
           <Button onClick={handleSave} disabled={isFormInvalid}>
             {saving ? "Guardando..." : "Crear Obra"}
           </Button>
