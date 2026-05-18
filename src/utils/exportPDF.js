@@ -142,6 +142,7 @@ function drawCoverPage(doc, {
   byProject,
   globalPct,
   lastLogDate,
+  userName = '',
 }) {
   const projectNames = Object.keys(byProject);
   const docCode = `DGC-INF-${todayShort.replace(/-/g, '')}`;
@@ -236,6 +237,7 @@ function drawCoverPage(doc, {
     cy += 8;
   });
 
+  let lines = [];
   if (projectNames.length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
@@ -246,8 +248,20 @@ function drawCoverPage(doc, {
     doc.setTextColor(55, 65, 95);
     const preview = projectNames.slice(0, 5).join('  ·  ');
     const suffix = projectNames.length > 5 ? `  (+${projectNames.length - 5} más)` : '';
-    const lines = doc.splitTextToSize(preview + suffix, cardW - 16);
+    lines = doc.splitTextToSize(preview + suffix, cardW - 16);
     doc.text(lines, cardX + 8, cy + 7);
+  }
+  
+  if (userName) {
+    cy += lines ? lines.length * 4 + 4 : 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(13, 27, 64);
+    doc.text('Emitido por:', cardX + 8, cy + 2);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(25, 35, 65);
+    doc.text(userName, cardX + 52, cy);
   }
 
   const barY = PAGE_H - 52;
@@ -280,7 +294,7 @@ function drawCoverPage(doc, {
   );
 }
 
-export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], checklistEntries = []) {
+export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], checklistEntries = [], userName = '') {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
@@ -317,6 +331,7 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
     byProject,
     globalPct,
     lastLogDate,
+    userName,
   });
 
   // ══════════════════════════════════════════════════════════════

@@ -7,6 +7,7 @@ import { ArrowLeft, Camera, FileText, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
+import { exportReportPDF } from '@/utils/exportPDF';
 
 import ItemInfo from '../components/detail/ItemInfo';
 import DailyLogTable from '../components/detail/DailyLogTable';
@@ -222,10 +223,16 @@ export default function ItemDetail() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-bold">Detalle del Ítem</h1>
-          <ItemScopeSummary item={item} />
-        </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-bold">Detalle del Ítem</h1>
+            <ItemScopeSummary item={item} />
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => exportReportPDF([item], scopedLogs, scopedPhotos, [], user?.full_name)}
+          >
+            Exportar PDF
+          </Button>
       </div>
 
       <ItemInfo item={item} />
