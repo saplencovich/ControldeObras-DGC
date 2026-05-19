@@ -30,6 +30,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { usePermissions } from "@/lib/PermissionsContext";
 import { getFloorList } from "@/utils/floors";
 
 const statusBadge = {
@@ -109,12 +110,14 @@ function buildRowsForFloors(items) {
     const floors = getFloorList(item.floor);
 
     if (floors.length === 0) {
-      return [{
-        ...item,
-        displayFloor: "",
-        displayRowId: `${item.id}-default`,
-        isPrimaryFloorRow: true,
-      }];
+      return [
+        {
+          ...item,
+          displayFloor: "",
+          displayRowId: `${item.id}-default`,
+          isPrimaryFloorRow: true,
+        },
+      ];
     }
 
     return floors.map((floor, index) => ({
@@ -150,6 +153,7 @@ export default function MasterPlanTable({
   onDeleteLog,
 }) {
   const [expandedItems, setExpandedItems] = useState({});
+  const { canDelete } = usePermissions();
   const displayRows = useMemo(() => buildRowsForFloors(items), [items]);
 
   const projectSupervisorByName = useMemo(() => {
@@ -222,17 +226,23 @@ export default function MasterPlanTable({
             </div>
           )}
           {displayRows.map((row) => {
-            const pct = row.planned_qty > 0 ? Math.round((row.executed_qty || 0) / row.planned_qty * 100) : 0;
-            const itemLogs = (logsByItemId[Number(row.id)] || []).filter((log) =>
-              logBelongsToFloor(log, row)
+            const pct =
+              row.planned_qty > 0
+                ? Math.round(((row.executed_qty || 0) / row.planned_qty) * 100)
+                : 0;
+            const itemLogs = (logsByItemId[Number(row.id)] || []).filter(
+              (log) => logBelongsToFloor(log, row),
             );
             return (
-              <div key={row.displayRowId} className="rounded-lg border p-3 shadow-sm">
+              <div
+                key={row.displayRowId}
+                className="rounded-lg border p-3 shadow-sm"
+              >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold">{row.activity}</p>
                     <p className="text-[11px] text-muted-foreground">
-                      {row.project} — {row.tower || '—'}
+                      {row.project} — {row.tower || "—"}
                     </p>
                     <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                       <UserRound className="h-3 w-3" />
@@ -242,15 +252,29 @@ export default function MasterPlanTable({
                       <FloorsDisplay floor={row.displayFloor} compact />
                     </div>
                   </div>
-                  <Badge className={`text-[10px] ${statusBadge[row.status] || statusBadge.pendiente}`}>
+                  <Badge
+                    className={`text-[10px] ${statusBadge[row.status] || statusBadge.pendiente}`}
+                  >
                     {statusLabel[row.status] || row.status}
                   </Badge>
                 </div>
                 <div className="mb-2 grid grid-cols-2 gap-2 text-[11px]">
-                  <div><span className="text-muted-foreground">Inicio:</span> {row.start_date || '—'}</div>
-                  <div><span className="text-muted-foreground">Término:</span> {row.end_date || '—'}</div>
-                  <div><span className="text-muted-foreground">Plan:</span> {row.planned_qty} {row.unit}</div>
-                  <div><span className="text-muted-foreground">Ejecutado:</span> {row.executed_qty || 0}</div>
+                  <div>
+                    <span className="text-muted-foreground">Inicio:</span>{" "}
+                    {row.start_date || "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Término:</span>{" "}
+                    {row.end_date || "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Plan:</span>{" "}
+                    {row.planned_qty} {row.unit}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ejecutado:</span>{" "}
+                    {row.executed_qty || 0}
+                  </div>
                 </div>
                 <div className="mb-2 space-y-1">
                   <div className="flex justify-between text-[11px]">
@@ -260,11 +284,16 @@ export default function MasterPlanTable({
                   <Progress value={pct} className="h-1.5" />
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{row.crew_name || 'Sin cuadrilla'}</span>
+                  <span>{row.crew_name || "Sin cuadrilla"}</span>
                   <span>{itemLogs.length} reportes</span>
                 </div>
                 <div className="mt-2 flex items-center justify-end gap-1">
-                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => safeOnDailyLog(row)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px]"
+                    onClick={() => safeOnDailyLog(row)}
+                  >
                     <FileText className="mr-1 h-3 w-3" /> Reporte
                   </Button>
                   <DropdownMenu>
@@ -275,16 +304,28 @@ export default function MasterPlanTable({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem asChild>
-                        <Link to={`/item/${row.id}`} className="flex items-center gap-2">
+                        <Link
+                          to={`/item/${row.id}`}
+                          className="flex items-center gap-2"
+                        >
                           <Eye className="w-3.5 h-3.5" /> Ver Detalle
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onEdit(row)} className="gap-2">
+                      <DropdownMenuItem
+                        onClick={() => onEdit(row)}
+                        className="gap-2"
+                      >
                         <Pencil className="w-3.5 h-3.5" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => onDelete(row)} className="gap-2 text-destructive">
-                        <Trash2 className="w-3.5 h-3.5" /> Borrar
-                      </DropdownMenuItem>
+                      {canDelete && (
+                        <DropdownMenuItem
+                          onClick={() => safeOnDelete(row)}
+                          className="gap-2 text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Borrar
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -303,8 +344,12 @@ export default function MasterPlanTable({
                 <TableHead className="text-xs">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
-                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">F. Inicio</TableHead>
-                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">F. Término</TableHead>
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">
+                  F. Inicio
+                </TableHead>
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">
+                  F. Término
+                </TableHead>
                 <TableHead className="text-right text-xs">Plan</TableHead>
                 <TableHead className="text-right text-xs">Ejecutado</TableHead>
                 <TableHead className="text-xs">Und</TableHead>
@@ -337,7 +382,7 @@ export default function MasterPlanTable({
                 const pct = getProgressPct(row);
                 const prodColor = getProductivityColor(pct);
                 const itemLogs = (logsByItemId[itemId] || []).filter((log) =>
-                  logBelongsToFloor(log, row)
+                  logBelongsToFloor(log, row),
                 );
                 const isExpanded = expandedItems[row.displayRowId];
 
@@ -419,9 +464,7 @@ export default function MasterPlanTable({
                             statusBadge[row.status] || statusBadge.pendiente
                           }`}
                         >
-                          {statusLabel[row.status] ||
-                            row.status ||
-                            "Pendiente"}
+                          {statusLabel[row.status] || row.status || "Pendiente"}
                         </Badge>
                       </TableCell>
 
@@ -478,13 +521,15 @@ export default function MasterPlanTable({
                               Editar
                             </DropdownMenuItem>
 
-                            <DropdownMenuItem
-                              onClick={() => safeOnDelete(row)}
-                              className="gap-2 text-destructive"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Borrar
-                            </DropdownMenuItem>
+                            {canDelete && (
+                              <DropdownMenuItem
+                                onClick={() => safeOnDelete(row)}
+                                className="gap-2 text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Borrar
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

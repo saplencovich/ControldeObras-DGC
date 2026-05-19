@@ -49,7 +49,9 @@ export default function ItemDetail() {
     ...queryOptions,
   });
 
-  const item = allItems.find((masterItem) => String(masterItem.id) === String(itemId));
+  const item = allItems.find(
+    (masterItem) => String(masterItem.id) === String(itemId)
+  );
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -59,16 +61,16 @@ export default function ItemDetail() {
 
   const { data: logs = [] } = useQuery({
     queryKey: ['dailyLogs', itemId],
-    queryFn: () => api.get(`/daily-logs?master_item_id=${encodeURIComponent(itemId)}`),
+    queryFn: () =>
+      api.get(`/daily-logs?master_item_id=${encodeURIComponent(itemId)}`),
     enabled: !!itemId,
     ...queryOptions,
   });
 
-
-
   const { data: workers = [] } = useQuery({
     queryKey: ['workers', itemId],
-    queryFn: () => api.get(`/workers?master_item_id=${encodeURIComponent(itemId)}`),
+    queryFn: () =>
+      api.get(`/workers?master_item_id=${encodeURIComponent(itemId)}`),
     enabled: !!itemId,
     ...queryOptions,
   });
@@ -81,38 +83,55 @@ export default function ItemDetail() {
     ...queryOptions,
   });
 
-
-
   const handleSaveLog = async (data) => {
-  try {
-    const newLog = await api.post("/daily-logs", data);
+    try {
+      const payload = { ...data };
 
-    if (Array.isArray(data.photos) && data.photos.length > 0) {
-      for (const photo of data.photos) {
-        await api.post("/site-photos", {
-          daily_log_id: newLog.id,
-          master_item_id: data.master_item_id || itemId,
-          file_url: photo.file_url || photo.url || "",
-          description: photo.description || "",
-          label: photo.label || "reporte_diario",
-          date:
-            photo.date ||
-            data.date ||
-            new Date().toISOString().split("T")[0],
+      // Si la firma viene como base64 desde SignaturePad,
+      // se sube como PNG a /uploads/signatures y se reemplaza por su ruta.
+      if (
+        payload.capataz_signature &&
+        typeof payload.capataz_signature === 'string' &&
+        payload.capataz_signature.startsWith('data:image/png;base64,')
+      ) {
+        const uploadedSignature = await api.post('/upload/signature', {
+          imageBase64: payload.capataz_signature,
         });
+
+        payload.capataz_signature = uploadedSignature.file_url;
       }
+
+      // Se guarda el reporte con capataz_signature como ruta.
+      // La firma NO se guarda en site_photos.
+      const newLog = await api.post('/daily-logs', payload);
+
+      // Solo las fotos reales del reporte se guardan en site_photos.
+      if (Array.isArray(payload.photos) && payload.photos.length > 0) {
+        for (const photo of payload.photos) {
+          await api.post('/site-photos', {
+            daily_log_id: newLog.id,
+            master_item_id: payload.master_item_id || itemId,
+            file_url: photo.file_url || photo.url || '',
+            description: photo.description || '',
+            label: photo.label || 'reporte_diario',
+            date:
+              photo.date ||
+              payload.date ||
+              new Date().toISOString().split('T')[0],
+          });
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['dailyLogs', itemId] });
+      await queryClient.invalidateQueries({ queryKey: ['masterItems'] });
+      await queryClient.invalidateQueries({ queryKey: ['photos', itemId] });
+
+      return newLog;
+    } catch (error) {
+      console.error('Error al guardar reporte diario:', error);
+      throw error;
     }
-
-    await queryClient.invalidateQueries({ queryKey: ["dailyLogs", itemId] });
-    await queryClient.invalidateQueries({ queryKey: ["masterItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["photos", itemId] });
-
-    return newLog;
-  } catch (error) {
-    console.error("Error al guardar reporte diario:", error);
-    throw error;
-  }
-};
+  };
 
   const handleCloseLogForm = () => {
     setShowLogForm(false);
@@ -135,22 +154,29 @@ export default function ItemDetail() {
         });
       }
 
-      const relatedPhotos = photos.filter(photo => photo.daily_log_id === log.id);
+      const relatedPhotos = photos.filter(
+        (photo) => photo.daily_log_id === log.id
+      );
+
       for (const photo of relatedPhotos) {
         await api.delete(`/site-photos/${photo.id}`);
       }
 
       await api.delete(`/daily-logs/${log.id}`);
 
-      await api.post("/audit-logs", {
-        action: "eliminar",
-        entity_name: "DailyLog",
-        entity_id: log.id,
-        user_name: user?.full_name || "",
-        user_email: user?.email || "",
-        description: `Eliminó reporte del ${log.date} (${item?.activity || ""} - ${item?.project || ""})`,
-        previous_data: JSON.stringify(log),
-      }).catch(e => console.warn(e));
+      await api
+        .post('/audit-logs', {
+          action: 'eliminar',
+          entity_name: 'DailyLog',
+          entity_id: log.id,
+          user_name: user?.full_name || '',
+          user_email: user?.email || '',
+          description: `Eliminó reporte del ${log.date} (${
+            item?.activity || ''
+          } - ${item?.project || ''})`,
+          previous_data: JSON.stringify(log),
+        })
+        .catch((e) => console.warn(e));
 
       await queryClient.invalidateQueries({ queryKey: ['dailyLogs', itemId] });
       await queryClient.invalidateQueries({ queryKey: ['masterItems'] });
@@ -185,20 +211,25 @@ export default function ItemDetail() {
   const scopedWorkers = workers.filter(
     (worker) => String(worker.master_item_id) === String(itemId)
   );
+
   const scopedPhotos = photos.filter(
     (photo) => String(photo.master_item_id) === String(itemId)
   );
 
   const projectSupervisor =
     projects.find((project) => project.name === item.project)?.supervisor || '';
-  const projectForItem = projects.find((project) => project.name === item.project) || null;
+
+  const projectForItem =
+    projects.find((project) => project.name === item.project) || null;
 
   const totalExecutedInLogs = scopedLogs.reduce(
     (sum, log) => sum + (Number(log.executed_today) || 0),
     0
   );
+
   const productivityRows = scopedLogs.reduce(
-    (sum, log) => sum + (Array.isArray(log.crew_workers) ? log.crew_workers.length : 0),
+    (sum, log) =>
+      sum + (Array.isArray(log.crew_workers) ? log.crew_workers.length : 0),
     0
   );
 
@@ -209,7 +240,6 @@ export default function ItemDetail() {
       hint: `Ejecutado en bitácora: ${totalExecutedInLogs}`,
       icon: FileText,
     },
-
     {
       title: 'Registro fotográfico',
       value: scopedPhotos.length,
@@ -232,25 +262,27 @@ export default function ItemDetail() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold">Detalle del Ítem</h1>
-            <ItemScopeSummary item={item} />
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={() =>
-              exportReportPDF(
-                [item],
-                scopedLogs,
-                scopedPhotos,
-                [],
-                projectForItem ? [projectForItem] : [],
-                projectSupervisor
-              )
-            }
-          >
-            Exportar PDF
-          </Button>
+
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-bold">Detalle del Ítem</h1>
+          <ItemScopeSummary item={item} />
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={() =>
+            exportReportPDF(
+              [item],
+              scopedLogs,
+              scopedPhotos,
+              [],
+              projectForItem ? [projectForItem] : [],
+              projectSupervisor
+            )
+          }
+        >
+          Exportar PDF
+        </Button>
       </div>
 
       <ItemInfo item={item} />
@@ -261,8 +293,12 @@ export default function ItemDetail() {
             <CardContent className="flex items-center justify-between p-4">
               <div>
                 <p className="text-xs text-muted-foreground">{card.title}</p>
-                <p className="text-lg font-semibold leading-tight">{card.value}</p>
-                <p className="text-[11px] text-muted-foreground">{card.hint}</p>
+                <p className="text-lg font-semibold leading-tight">
+                  {card.value}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {card.hint}
+                </p>
               </div>
               <card.icon className="h-4 w-4 text-accent" />
             </CardContent>
@@ -271,7 +307,11 @@ export default function ItemDetail() {
       </div>
 
       <div className="w-full">
-        <DailyLogTable logs={scopedLogs} onAddLog={() => setShowLogForm(true)} onDeleteLog={handleDeleteLog} />
+        <DailyLogTable
+          logs={scopedLogs}
+          onAddLog={() => setShowLogForm(true)}
+          onDeleteLog={handleDeleteLog}
+        />
       </div>
 
       <WorkerProductivity logs={scopedLogs} workers={scopedWorkers} />

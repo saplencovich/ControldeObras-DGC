@@ -26,12 +26,20 @@ export function PermissionsProvider({ children }) {
       allowedProjects,
       isLoading: isLoadingAuth,
       hasAccessToProject,
-      canEditUsers: isAdmin,
-      canCreateProjects: isAdmin || isSupervisor,
-      canDeleteItems: isAdmin || isSupervisor,
       isAdmin,
       isSupervisor,
       isViewer,
+      canEditUsers: isAdmin,
+      canCreateProjects: isAdmin || isSupervisor,
+      canCreateItems: isAdmin || isSupervisor || isViewer,
+      canCreateReports: isAdmin || isSupervisor || isViewer,
+      canDelete: isAdmin,
+      canViewPersonal: isAdmin || isSupervisor,
+      canManagePersonal: isAdmin || isSupervisor,
+      canExport: isAdmin || isSupervisor,
+      canViewProductivity: isAdmin || isSupervisor,
+      showPersonalNav: isAdmin || isSupervisor,
+      showUsersNav: isAdmin,
     };
   }, [currentUser, isLoadingAuth]);
 

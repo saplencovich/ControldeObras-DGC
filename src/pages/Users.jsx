@@ -2,51 +2,62 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Users as UsersIcon, Plus, Pencil, AlertTriangle } from 'lucide-react';
+import { Shield, Plus, Trash2, Pencil, AlertCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
-import { toast } from 'sonner';
+import { Navigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 
+const ROLES = [
+  { value: 'admin', label: 'Administrador' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'viewer', label: 'Capataz' },
+];
+
+const roleBadgeClass = {
+  admin: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  supervisor: 'bg-amber-100 text-amber-700 border-amber-200',
+  viewer: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+const emptyForm = {
+  email: '',
+  password: '',
+  full_name: '',
+  role: 'viewer',
+  allowed_projects: [],
+};
+
+function parseAllowedProjects(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
+
 export default function Users() {
-  const queryClient = useQueryClient();
   const { isAdmin } = usePermissions();
+  const queryClient = useQueryClient();
 
   const [showForm, setShowForm] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [form, setForm] = useState({
-    email: '',
-    full_name: '',
-    role: 'viewer',
-    allowed_projects: [],
-    password: '',
-  });
+  const [editUser, setEditUser] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  if (!isAdmin) return <Navigate to="/" replace />;
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -58,115 +69,95 @@ export default function Users() {
     queryFn: () => api.get('/projects'),
   });
 
-  const saveUser = useMutation({
-    mutationFn: async (data) => {
-      const payload = {
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        allowed_projects: Array.isArray(data.allowed_projects)
-          ? data.allowed_projects
-          : [],
-      };
-
-      if (editingUser) {
-        return api.put(`/users/${editingUser.id}`, payload);
-      }
-
-      return api.post('/users', {
-        ...payload,
-        password: data.password || '123456',
-      });
-    },
+  const createUser = useMutation({
+    mutationFn: (data) => api.post('/users', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowForm(false);
-      setEditingUser(null);
-      setForm({
-        email: '',
-        full_name: '',
-        role: 'viewer',
-        allowed_projects: [],
-        password: '',
-      });
-      toast.success(editingUser ? 'Usuario actualizado' : 'Usuario creado');
+      setForm(emptyForm);
+      setFormError('');
     },
-    onError: (err) => {
-      toast.error('Error: ' + err.message);
-    },
+    onError: (err) => setFormError(err.message || 'Error al crear usuario.'),
   });
 
-  const handleEdit = (user) => {
-    const allowedProjects = Array.isArray(user.allowed_projects)
-      ? user.allowed_projects
-      : typeof user.allowed_projects === 'string' && user.allowed_projects.trim()
-        ? [user.allowed_projects]
-        : [];
+  const updateUser = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/users/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setShowForm(false);
+      setEditUser(null);
+      setForm(emptyForm);
+      setFormError('');
+    },
+    onError: (err) => setFormError(err.message || 'Error al actualizar usuario.'),
+  });
 
-    setEditingUser(user);
-    setForm({
-      email: user.email || '',
-      full_name: user.full_name || '',
-      role: user.role || 'viewer',
-      allowed_projects: allowedProjects,
-      password: '',
-    });
+  const deleteUser = useMutation({
+    mutationFn: (id) => api.delete(`/users/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err) => alert(err.message || 'Error al eliminar usuario.'),
+  });
+
+  const handleOpenCreate = () => {
+    setEditUser(null);
+    setForm(emptyForm);
+    setFormError('');
+    setShowPassword(false);
     setShowForm(true);
   };
 
-  const roleLabels = {
-    viewer: { label: 'Viewer', color: 'bg-blue-100 text-blue-700' },
-    supervisor: { label: 'Supervisor', color: 'bg-amber-100 text-amber-700' },
-    admin: { label: 'Admin', color: 'bg-emerald-100 text-emerald-700' },
+  const handleOpenEdit = (u) => {
+    setEditUser(u);
+    setForm({
+      email: u.email || '',
+      password: '',
+      full_name: u.full_name || '',
+      role: u.role || 'viewer',
+      allowed_projects: parseAllowedProjects(u.allowed_projects),
+    });
+    setFormError('');
+    setShowPassword(false);
+    setShowForm(true);
   };
 
-  if (!isAdmin) {
+  const handleSave = () => {
+    const payload = {
+      email: form.email,
+      full_name: form.full_name,
+      role: form.role,
+      allowed_projects: form.role === 'admin' ? [] : (Array.isArray(form.allowed_projects) ? form.allowed_projects : []),
+      ...(form.password ? { password: form.password } : {}),
+    };
+
+    if (editUser) {
+      updateUser.mutate({ id: editUser.id, data: payload });
+    } else {
+      createUser.mutate(payload);
+    }
+  };
+
+  const isPending = createUser.isPending || updateUser.isPending;
+
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
-              Acceso Restringido
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Solo los administradores pueden gestionar usuarios.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
-  if (isLoading) {
-    return <div className="text-center py-12">Cargando usuarios...</div>;
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <UsersIcon className="w-5 h-5 text-accent" />
+          <Shield className="w-5 h-5 text-accent" />
           Gestión de Usuarios
         </h1>
 
-        <Button
-          onClick={() => {
-            setForm({
-              email: '',
-              full_name: '',
-              role: 'viewer',
-              allowed_projects: [],
-              password: '',
-            });
-            setEditingUser(null);
-            setShowForm(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Crear Usuario
+        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={handleOpenCreate}>
+          <Plus className="w-3 h-3" />
+          Agregar Usuario
         </Button>
       </div>
 
@@ -181,157 +172,165 @@ export default function Users() {
         </CardHeader>
 
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-xs">Nombre</TableHead>
-                <TableHead className="text-xs">Email</TableHead>
-                <TableHead className="text-xs">Rol</TableHead>
-                <TableHead className="text-xs">Obras Permitidas</TableHead>
-                <TableHead className="text-xs text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id} className="hover:bg-muted/30">
-                  <TableCell className="font-medium">
-                    {user.full_name || '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        roleLabels[user.role]?.color || roleLabels.viewer.color
-                      }
-                    >
-                      {roleLabels[user.role]?.label || 'Viewer'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs max-w-xs truncate">
-                    {user.role === 'admin' ? (
-                      <Badge variant="outline" className="text-xs">
-                        Todas las obras
-                      </Badge>
-                    ) : (() => {
-                      const allowed = Array.isArray(user.allowed_projects)
-                        ? user.allowed_projects
-                        : typeof user.allowed_projects === 'string' &&
-                            user.allowed_projects.trim()
-                          ? [user.allowed_projects]
-                          : [];
-
-                      return allowed.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {allowed.slice(0, 3).map((p) => (
-                            <Badge key={p} variant="outline" className="text-xs">
-                              {p}
-                            </Badge>
-                          ))}
-                          {allowed.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{allowed.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">Sin acceso</span>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEdit(user)}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="text-xs">Nombre</TableHead>
+                  <TableHead className="text-xs">Correo</TableHead>
+                  <TableHead className="text-xs">Rol</TableHead>
+                  <TableHead className="text-xs">Obras Permitidas</TableHead>
+                  <TableHead className="text-xs">Estado</TableHead>
+                  <TableHead className="text-xs text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+
+              <TableBody>
+                {users.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">
+                      Sin usuarios registrados.
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {users.map((u) => {
+                  const allowed = parseAllowedProjects(u.allowed_projects);
+                  return (
+                    <TableRow key={u.id} className="hover:bg-muted/30 text-xs">
+                      <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                      <TableCell>
+                        <Badge className={`text-[10px] border ${roleBadgeClass[u.role] || roleBadgeClass.viewer}`}>
+                          {ROLES.find((r) => r.value === u.role)?.label || u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-xs">
+                        {u.role === 'admin' ? (
+                          <Badge variant="outline" className="text-xs">Todas las obras</Badge>
+                        ) : allowed.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {allowed.slice(0, 3).map((p) => (
+                              <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                            ))}
+                            {allowed.length > 3 && (
+                              <Badge variant="outline" className="text-xs">+{allowed.length - 3}</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Sin acceso</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] ${u.active ? 'text-green-600 border-green-200' : 'text-gray-400'}`}>
+                          {u.active ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleOpenEdit(u)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600"
+                            onClick={() =>
+                              window.confirm(`¿Eliminar a ${u.full_name}?`) &&
+                              deleteUser.mutate(u.id)
+                            }
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
+      {/* Modal crear / editar */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingUser ? 'Editar Usuario' : 'Crear Nuevo Usuario'}
-            </DialogTitle>
+            <DialogTitle>{editUser ? 'Editar Usuario' : 'Agregar Usuario'}</DialogTitle>
             <DialogDescription>
-              {editingUser
+              {editUser
                 ? 'Actualiza los datos, rol y permisos del usuario.'
                 : 'Crea un usuario directamente en la base de datos local.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <Label className="text-xs">Email *</Label>
+              <Label className="text-xs">Nombre completo *</Label>
+              <Input
+                value={form.full_name}
+                onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                placeholder="Ej: Juan Pérez"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">Correo electrónico *</Label>
               <Input
                 type="email"
                 value={form.email}
-                onChange={(e) =>
-                  setForm({ ...form, email: e.target.value })
-                }
-                placeholder="usuario@empresa.com"
-                disabled={!!editingUser}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="correo@dgc.cl"
+                disabled={!!editUser}
               />
             </div>
 
             <div>
-              <Label className="text-xs">Nombre *</Label>
-              <Input
-                value={form.full_name}
-                onChange={(e) =>
-                  setForm({ ...form, full_name: e.target.value })
-                }
-                placeholder="Nombre completo"
-              />
-            </div>
-
-            {!editingUser && (
-              <div>
-                <Label className="text-xs">Contraseña *</Label>
+              <Label className="text-xs">
+                Contraseña {editUser ? '(dejar vacío para no cambiar)' : '*'}
+              </Label>
+              <div className="relative">
                 <Input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={form.password}
-                  onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
-                  }
-                  placeholder="Mínimo temporal"
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder={editUser ? '••••••••' : 'Mínimo 6 caracteres'}
+                  className="pr-9"
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </Button>
               </div>
-            )}
+            </div>
 
             <div>
               <Label className="text-xs">Rol *</Label>
-              <Select
-                value={form.role}
-                onValueChange={(v) => setForm({ ...form, role: v })}
-              >
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v, allowed_projects: [] })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar rol" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Viewer (1 obra)</SelectItem>
-                  <SelectItem value="supervisor">
-                    Supervisor (múltiples obras)
-                  </SelectItem>
-                  <SelectItem value="admin">Admin (acceso total)</SelectItem>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
-                {form.role === 'viewer' && 'Acceso limitado a una sola obra'}
-                {form.role === 'supervisor' &&
-                  'Acceso a múltiples obras asignadas'}
-                {form.role === 'admin' &&
-                  'Acceso completo a todo el sistema'}
+                {form.role === 'viewer' && 'Acceso limitado a obras asignadas'}
+                {form.role === 'supervisor' && 'Acceso a múltiples obras asignadas'}
+                {form.role === 'admin' && 'Acceso completo a todo el sistema'}
               </p>
             </div>
 
@@ -339,51 +338,42 @@ export default function Users() {
               <div>
                 <Label className="text-xs">Obras Permitidas *</Label>
                 <MultiSelect
-                  options={projects.map((p) => ({
-                    label: p.name,
-                    value: p.name,
-                  }))}
-                  selected={
-                    Array.isArray(form.allowed_projects)
-                      ? form.allowed_projects
-                      : []
-                  }
-                  onChange={(selected) =>
-                    setForm({ ...form, allowed_projects: selected })
-                  }
+                  options={projects.map((p) => ({ label: p.name, value: p.name }))}
+                  selected={Array.isArray(form.allowed_projects) ? form.allowed_projects : []}
+                  onChange={(selected) => setForm({ ...form, allowed_projects: selected })}
                   placeholder="Seleccionar obras"
                 />
-                {(!Array.isArray(form.allowed_projects) ||
-                  form.allowed_projects.length === 0) && (
+                {(!Array.isArray(form.allowed_projects) || form.allowed_projects.length === 0) && (
                   <p className="text-xs text-amber-600 mt-1">
                     ⚠️ Debes seleccionar al menos una obra
                   </p>
                 )}
               </div>
             )}
+
+            {formError && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-red-700">{formError}</p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>
+            <Button variant="outline" onClick={() => { setShowForm(false); setFormError(''); }}>
               Cancelar
             </Button>
             <Button
-              onClick={() => saveUser.mutate(form)}
+              onClick={handleSave}
               disabled={
-                !form.email ||
                 !form.full_name ||
-                (!editingUser && !form.password) ||
-                (form.role !== 'admin' &&
-                  (!Array.isArray(form.allowed_projects) ||
-                    form.allowed_projects.length === 0)) ||
-                saveUser.isPending
+                !form.email ||
+                (!editUser && !form.password) ||
+                (form.role !== 'admin' && (!Array.isArray(form.allowed_projects) || form.allowed_projects.length === 0)) ||
+                isPending
               }
             >
-              {saveUser.isPending
-                ? 'Guardando...'
-                : editingUser
-                  ? 'Actualizar'
-                  : 'Crear Usuario'}
+              {isPending ? 'Guardando...' : editUser ? 'Guardar cambios' : 'Crear usuario'}
             </Button>
           </DialogFooter>
         </DialogContent>

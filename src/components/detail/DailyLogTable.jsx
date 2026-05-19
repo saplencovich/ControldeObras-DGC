@@ -4,9 +4,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FileText, Plus, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { usePermissions } from '@/lib/PermissionsContext';
 
 export default function DailyLogTable({ logs, onAddLog, onDeleteLog }) {
   const [expandedLog, setExpandedLog] = useState(null);
+  const { canDelete } = usePermissions();
 
   return (
     <Card className="border-0 shadow-sm">
@@ -32,20 +34,20 @@ export default function DailyLogTable({ logs, onAddLog, onDeleteLog }) {
                 <TableHead className="text-xs text-right">Horas</TableHead>
                 <TableHead className="text-xs text-center">Restricción</TableHead>
                 <TableHead className="text-xs">Observaciones</TableHead>
-                <TableHead className="w-10"></TableHead>
+                {canDelete && <TableHead className="w-10"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={canDelete ? 7 : 6} className="text-center text-sm text-muted-foreground py-8">
                     Sin registros en la bitácora
                   </TableCell>
                 </TableRow>
               )}
               {logs.map(log => (
                 <React.Fragment key={log.id}>
-                  <TableRow 
+                  <TableRow
                     className="hover:bg-muted/30 text-xs cursor-pointer"
                     onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
                   >
@@ -70,24 +72,26 @@ export default function DailyLogTable({ logs, onAddLog, onDeleteLog }) {
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {log.has_restriction && log.restriction_detail ? log.restriction_detail : log.observations || '—'}
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onDeleteLog) onDeleteLog(log);
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </TableCell>
+                    {canDelete && (
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onDeleteLog) onDeleteLog(log);
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
-                  
+
                   {expandedLog === log.id && log.crew_workers?.length > 0 && (
                     <TableRow className="bg-muted/20">
-                      <TableCell colSpan={7} className="p-4">
+                      <TableCell colSpan={canDelete ? 7 : 6} className="p-4">
                         <div className="space-y-2">
                           <p className="text-xs font-semibold text-muted-foreground mb-3">
                             Integrantes de la cuadrilla — {log.crew_name}
