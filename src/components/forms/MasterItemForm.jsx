@@ -206,12 +206,57 @@ export default function MasterItemForm({
       return "Debe seleccionar una obra/proyecto.";
     }
 
+    if (!form.tower.trim()) {
+      return "Debe ingresar una torre.";
+    }
+
+    if (!form.floors || form.floors.length === 0) {
+      return "Debe seleccionar al menos un piso.";
+    }
+
     if (!form.activity.trim()) {
       return "Debe ingresar una actividad.";
     }
 
+    if (!form.start_date) {
+      return "Debe ingresar la fecha de inicio.";
+    }
+
+    if (!form.end_date) {
+      return "Debe ingresar la fecha de termino.";
+    }
+
     if (!form.planned_qty || Number(form.planned_qty) <= 0) {
       return "Debe ingresar una cantidad planificada mayor a 0.";
+    }
+
+    if (!form.unit.trim()) {
+      return "Debe ingresar una unidad.";
+    }
+
+    if (!form.crew_name.trim()) {
+      return "Debe ingresar el nombre de la cuadrilla.";
+    }
+
+    const filledMembers = crewMembers.filter((member) => member.name.trim() || member.role.trim());
+    if (filledMembers.length === 0) {
+      return "Debe agregar al menos una persona en Integrantes de la Cuadrilla.";
+    }
+
+    if (filledMembers.some((member) => !member.name.trim() || !member.role.trim())) {
+      return "Cada integrante de la cuadrilla debe tener nombre y cargo.";
+    }
+
+    if (!form.status) {
+      return "Debe seleccionar un estado.";
+    }
+
+    if (!form.release_status) {
+      return "Debe seleccionar el estado de liberacion.";
+    }
+
+    if (!form.observations.trim()) {
+      return "Debe ingresar observaciones.";
     }
 
     return "";
@@ -219,7 +264,7 @@ export default function MasterItemForm({
 
   const buildData = () => {
     const validMembers = crewMembers
-      .filter((member) => member.name.trim())
+      .filter((member) => member.name.trim() && member.role.trim())
       .map((member) => ({
         name: member.name.trim(),
         role: member.role.trim(),
@@ -286,14 +331,29 @@ export default function MasterItemForm({
   };
 
   const validMemberCount = crewMembers.filter((member) =>
-    member.name.trim()
+    member.name.trim() && member.role.trim()
   ).length;
 
   const isFormInvalid =
     !form.project ||
+    !form.tower.trim() ||
+    !form.floors ||
+    form.floors.length === 0 ||
     !form.activity.trim() ||
+    !form.start_date ||
+    !form.end_date ||
     !form.planned_qty ||
     Number(form.planned_qty) <= 0 ||
+    !form.unit.trim() ||
+    !form.crew_name.trim() ||
+    validMemberCount === 0 ||
+    crewMembers.some((member) => {
+      const hasAnyValue = member.name.trim() || member.role.trim();
+      return hasAnyValue && (!member.name.trim() || !member.role.trim());
+    }) ||
+    !form.status ||
+    !form.release_status ||
+    !form.observations.trim() ||
     saving;
 
   const uniqueActivities = Array.from(

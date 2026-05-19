@@ -561,6 +561,7 @@ export default function Dashboard() {
           return log;
         }}
         masterItem={dailyLogItem}
+        project={projects.find((p) => p.name === dailyLogItem?.project)}
         userName={user?.full_name}
       />
     </div>

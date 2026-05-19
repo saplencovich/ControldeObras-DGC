@@ -295,6 +295,7 @@ export default function MasterPlan() {
         }}
         onSave={(data) => createLog.mutateAsync(data)}
         masterItem={dailyLogItem}
+        project={projects.find((p) => p.name === dailyLogItem?.project)}
         userName={user?.full_name}
       />
     </div>

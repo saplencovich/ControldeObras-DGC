@@ -191,6 +191,7 @@ export default function ItemDetail() {
 
   const projectSupervisor =
     projects.find((project) => project.name === item.project)?.supervisor || '';
+  const projectForItem = projects.find((project) => project.name === item.project) || null;
 
   const totalExecutedInLogs = scopedLogs.reduce(
     (sum, log) => sum + (Number(log.executed_today) || 0),
@@ -279,6 +280,7 @@ export default function ItemDetail() {
         onClose={handleCloseLogForm}
         onSave={handleSaveLog}
         masterItem={item}
+        project={projectForItem}
         userName={user?.full_name}
       />
     </div>

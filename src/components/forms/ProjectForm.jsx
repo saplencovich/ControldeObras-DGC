@@ -104,6 +104,15 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
 
   const handleSave = async () => {
     const name = form.name.trim();
+    const requiredFields = [
+      ["address", "La ubicacion es obligatoria."],
+      ["client", "El cliente es obligatorio."],
+      ["supervisor", "Debe seleccionar un supervisor."],
+      ["capataz", "Debe seleccionar un capataz."],
+      ["start_date", "La fecha de inicio es obligatoria."],
+      ["end_date", "La fecha de termino es obligatoria."],
+      ["description", "La descripcion es obligatoria."],
+    ];
     const duplicateProject = projects.find(
       (project) =>
         normalizeProjectName(project.name) === normalizeProjectName(name) &&
@@ -112,6 +121,12 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
 
     if (!name) {
       setError("El nombre de la obra es obligatorio.");
+      return;
+    }
+
+    const missingField = requiredFields.find(([field]) => !String(form[field] || "").trim());
+    if (missingField) {
+      setError(missingField[1]);
       return;
     }
 
@@ -131,14 +146,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
         client: form.client.trim(),
         supervisor: form.supervisor,
         capataz: form.capataz,
-        description:
-          form.description.trim() ||
-          [
-            form.supervisor ? `Supervisor: ${form.supervisor}` : "",
-            form.capataz ? `Capataz: ${form.capataz}` : "",
-          ]
-            .filter(Boolean)
-            .join(" | "),
+        description: form.description.trim(),
         status: form.status || "activa",
       };
 
@@ -206,7 +214,20 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
           Number(project.id) !== Number(editProject?.id)
       )
     : null;
-  const isFormInvalid = !form.name.trim() || Boolean(duplicateProject) || saving;
+  const requiredProjectFields = [
+    form.name,
+    form.address,
+    form.client,
+    form.supervisor,
+    form.capataz,
+    form.start_date,
+    form.end_date,
+    form.description,
+  ];
+  const isFormInvalid =
+    requiredProjectFields.some((value) => !String(value || "").trim()) ||
+    Boolean(duplicateProject) ||
+    saving;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

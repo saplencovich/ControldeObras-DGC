@@ -44,7 +44,7 @@ const SERVER_URL = (
 
 const REQUIRE_PHOTO = false;
 const REQUIRE_SIGNATURE = false;
-const REQUIRE_CAPATAZ = false;
+const REQUIRE_CAPATAZ = true;
 
 const EMPTY_WORKER = {
   name: "",
@@ -67,13 +67,25 @@ const getInitialForm = (userName = "") => ({
 
 function buildCrewWorkers(workers) {
   return workers
-    .filter((worker) => worker.name?.trim())
+    .filter((worker) => worker.name?.trim() && worker.role?.trim())
     .map((worker) => ({
       name: worker.name.trim(),
-      role: worker.role || "",
+      role: worker.role.trim(),
       hours: Number(worker.hours) || 0,
       executed: Number(worker.executed) || 0,
     }));
+}
+
+function getCrewMembers(masterItem) {
+  if (!masterItem?.crew_members) return [];
+  if (Array.isArray(masterItem.crew_members)) return masterItem.crew_members;
+
+  try {
+    const parsed = JSON.parse(masterItem.crew_members);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function calculateTotalHours(formHoursWorked, crewWorkers) {
@@ -105,6 +117,7 @@ export default function DailyLogForm({
   onClose,
   onSave,
   masterItem,
+  project,
   userName,
 }) {
   const [form, setForm] = useState(getInitialForm(userName));
@@ -168,15 +181,15 @@ export default function DailyLogForm({
 
     setForm({
       ...getInitialForm(userName),
+      supervisor: project?.supervisor || userName || "",
       crew_name: masterItem?.crew_name || "",
+      capataz_name: project?.capataz || "",
     });
 
-    if (
-      Array.isArray(masterItem?.crew_members) &&
-      masterItem.crew_members.length > 0
-    ) {
+    const crewMembers = getCrewMembers(masterItem);
+    if (crewMembers.length > 0) {
       setWorkers(
-        masterItem.crew_members.map((member) => ({
+        crewMembers.map((member) => ({
           name: member.name || "",
           role: member.role || "",
           hours: "",
@@ -193,7 +206,7 @@ export default function DailyLogForm({
     setShowSignaturePad(false);
     setSignatureImage(null);
     setError("");
-  }, [open, masterItem, userName]);
+  }, [open, masterItem, project, userName]);
 
   const updateFormField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -290,8 +303,16 @@ export default function DailyLogForm({
       setError("");
 
       if (!masterItem) throw new Error("No hay ítem maestro asociado.");
+      if (!form.date) throw new Error("Debe ingresar la fecha del reporte.");
+      if (!form.supervisor?.trim()) throw new Error("Debe seleccionar un supervisor.");
+      if (!form.crew_name?.trim()) throw new Error("Debe ingresar la cuadrilla.");
       if (!form.executed_today || Number(form.executed_today) <= 0)
         throw new Error("Debe ingresar la cantidad ejecutada hoy.");
+      if (!form.hours_worked || Number(form.hours_worked) <= 0)
+        throw new Error("Debe ingresar las horas trabajadas.");
+      if (!form.observations.trim()) throw new Error("Debe ingresar observaciones.");
+      if (form.has_restriction && !form.restriction_detail.trim())
+        throw new Error("Debe ingresar el detalle de la restriccion.");
       if (uploadingPhotos) throw new Error("Espera a que terminen de subir las fotos.");
 
       const remainingQty = getRemainingQty(masterItem);
@@ -305,6 +326,26 @@ export default function DailyLogForm({
       if (REQUIRE_SIGNATURE && !signatureImage) throw new Error("Debe dibujar la firma del capataz.");
 
       const crewWorkers = buildCrewWorkers(workers);
+      if (crewWorkers.length === 0) {
+        throw new Error("Debe agregar al menos una persona en personal presente.");
+      }
+      if (
+        workers.some((worker) => {
+          const hasAnyValue =
+            worker.name.trim() || worker.role.trim() || worker.hours || worker.executed;
+          return (
+            hasAnyValue &&
+            (!worker.name.trim() ||
+              !worker.role.trim() ||
+              !worker.hours ||
+              Number(worker.hours) <= 0 ||
+              !worker.executed ||
+              Number(worker.executed) < 0)
+          );
+        })
+      ) {
+        throw new Error("Cada persona presente debe tener nombre, cargo, horas y ejecutado.");
+      }
       const totalHours = calculateTotalHours(form.hours_worked, crewWorkers);
 
       if (totalHours > 10) throw new Error("No se pueden registrar más de 10 horas en un día.");
@@ -343,9 +384,33 @@ export default function DailyLogForm({
   const goalInfo = getDailyGoalInfo();
   const remainingQty = getRemainingQty(masterItem);
   const executedTodayQty = Number(form.executed_today || 0);
+  const isSupervisorFixed = Boolean(project?.supervisor);
+  const isCapatazFixed = Boolean(project?.capataz);
+  const isCrewNameFixed = Boolean(masterItem?.crew_name);
 
   const isSaveDisabled =
+    !form.date ||
+    !form.supervisor.trim() ||
+    !form.crew_name.trim() ||
     !form.executed_today ||
+    Number(form.executed_today) <= 0 ||
+    !form.hours_worked ||
+    Number(form.hours_worked) <= 0 ||
+    !form.observations.trim() ||
+    (form.has_restriction && !form.restriction_detail.trim()) ||
+    buildCrewWorkers(workers).length === 0 ||
+    workers.some((worker) => {
+      const hasAnyValue = worker.name.trim() || worker.role.trim() || worker.hours || worker.executed;
+      return (
+        hasAnyValue &&
+        (!worker.name.trim() ||
+          !worker.role.trim() ||
+          !worker.hours ||
+          Number(worker.hours) <= 0 ||
+          !worker.executed ||
+          Number(worker.executed) < 0)
+      );
+    }) ||
     remainingQty <= 0 ||
     executedTodayQty > remainingQty ||
     saving ||
@@ -384,8 +449,9 @@ export default function DailyLogForm({
               <Select
                 value={form.supervisor}
                 onValueChange={(v) => updateFormField("supervisor", v)}
+                disabled={isSupervisorFixed}
               >
-                <SelectTrigger>
+                <SelectTrigger disabled={isSupervisorFixed}>
                   <SelectValue placeholder="Seleccionar supervisor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -402,6 +468,11 @@ export default function DailyLogForm({
                   )}
                 </SelectContent>
               </Select>
+              {isSupervisorFixed && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Supervisor fijado por la obra seleccionada.
+                </p>
+              )}
             </div>
           </div>
 
@@ -411,7 +482,13 @@ export default function DailyLogForm({
               value={form.crew_name}
               onChange={(e) => updateFormField("crew_name", e.target.value)}
               placeholder="Ej: Cuadrilla Eléctrica A"
+              disabled={isCrewNameFixed}
             />
+            {isCrewNameFixed && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Cuadrilla fijada por el ítem maestro.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -568,8 +645,9 @@ export default function DailyLogForm({
               <Select
                 value={form.capataz_name}
                 onValueChange={(v) => updateFormField("capataz_name", v)}
+                disabled={isCapatazFixed}
               >
-                <SelectTrigger>
+                <SelectTrigger disabled={isCapatazFixed}>
                   <SelectValue placeholder="Seleccionar capataz" />
                 </SelectTrigger>
                 <SelectContent>
@@ -586,6 +664,11 @@ export default function DailyLogForm({
                   )}
                 </SelectContent>
               </Select>
+              {isCapatazFixed && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Capataz fijado por la obra seleccionada.
+                </p>
+              )}
             </div>
 
             <div>

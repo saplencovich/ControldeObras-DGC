@@ -16,6 +16,10 @@ function normalizeProjectName(name) {
   return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function isBlank(value) {
+  return !String(value || "").trim();
+}
+
 function findProjectByName(name, excludeId, callback) {
   const normalizedName = normalizeProjectName(name);
 
@@ -77,6 +81,20 @@ router.post("/", (req, res) => {
   }
 
   const projectAddress = address || location || "";
+
+  const requiredFields = [
+    [projectAddress, "La ubicacion es obligatoria"],
+    [client, "El cliente es obligatorio"],
+    [supervisor, "El supervisor es obligatorio"],
+    [capataz, "El capataz es obligatorio"],
+    [start_date, "La fecha de inicio es obligatoria"],
+    [end_date, "La fecha de termino es obligatoria"],
+    [description, "La descripcion es obligatoria"],
+  ];
+  const missingField = requiredFields.find(([value]) => isBlank(value));
+  if (missingField) {
+    return res.status(400).json({ error: missingField[1] });
+  }
 
   findProjectByName(projectName, null, (err, existingProject) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -160,6 +178,20 @@ router.put("/:id", (req, res) => {
   }
 
   const projectAddress = address || location || "";
+
+  const requiredFields = [
+    [projectAddress, "La ubicacion es obligatoria"],
+    [client, "El cliente es obligatorio"],
+    [supervisor, "El supervisor es obligatorio"],
+    [capataz, "El capataz es obligatorio"],
+    [start_date, "La fecha de inicio es obligatoria"],
+    [end_date, "La fecha de termino es obligatoria"],
+    [description, "La descripcion es obligatoria"],
+  ];
+  const missingField = requiredFields.find(([value]) => isBlank(value));
+  if (missingField) {
+    return res.status(400).json({ error: missingField[1] });
+  }
 
   findProjectByName(projectName, id, (err, existingProject) => {
     if (err) return res.status(500).json({ error: err.message });
