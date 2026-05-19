@@ -132,13 +132,40 @@ export default function FilterBar({
 }) {
   const { canCreateProjects, isAdmin } = usePermissions();
 
-  const towerOptions = [
-    ...new Set([...TOWERS, ...masterItems.map((item) => item.tower).filter(Boolean)]),
-  ];
+  // Use the provided `filterOptionItems` (unfiltered source) to build dropdown options
+  const sourceItems = (filterOptionItems && filterOptionItems.length) ? filterOptionItems : masterItems;
+
+  const normalizeKey = (v) =>
+    String(v || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  const uniqueList = (arr) => {
+    const seen = new Set();
+    const out = [];
+    for (const v of arr) {
+      const key = normalizeKey(v);
+      if (!key) continue;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(String(v || "").trim());
+      }
+    }
+    return out;
+  };
+
+  const towerOptions = uniqueList([
+    ...TOWERS,
+    ...sourceItems.map((item) => item.tower),
+  ]);
   const floorOptions = getFloorOptions(filterOptionItems);
-  const activityOptions = [
-    ...new Set([...ACTIVITIES, ...masterItems.map((item) => item.activity).filter(Boolean)]),
-  ];
+  const activityOptions = uniqueList([
+    ...ACTIVITIES,
+    ...sourceItems.map((item) => item.activity),
+  ]);
 
   const updateFilter = (key, value) => {
     setFilters((prev) => ({
