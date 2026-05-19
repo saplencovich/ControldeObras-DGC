@@ -31,6 +31,62 @@ function parseDailyLog(row) {
   };
 }
 
+function isBlank(value) {
+  return !String(value || "").trim();
+}
+
+function validateDailyLogPayload(payload) {
+  const requiredFields = [
+    [payload.date, "Debe ingresar la fecha del reporte"],
+    [payload.supervisor, "Debe seleccionar un supervisor"],
+    [payload.crew_name, "Debe ingresar la cuadrilla"],
+    [payload.capataz_name, "Debe ingresar el nombre del capataz"],
+    [payload.observations, "Debe ingresar observaciones"],
+  ];
+  const missingField = requiredFields.find(([value]) => isBlank(value));
+  if (missingField) return missingField[1];
+
+  if (!payload.executed_today || toNumber(payload.executed_today) <= 0) {
+    return "Debe ingresar la cantidad ejecutada hoy";
+  }
+
+  if (!payload.hours_worked || toNumber(payload.hours_worked) <= 0) {
+    return "Debe ingresar las horas trabajadas";
+  }
+
+  if (payload.has_restriction && isBlank(payload.restriction_detail)) {
+    return "Debe ingresar el detalle de la restriccion";
+  }
+
+  const crewWorkers = safeParseArray(payload.crew_workers).filter(
+    (worker) =>
+      !isBlank(worker?.name) ||
+      !isBlank(worker?.role) ||
+      !isBlank(worker?.hours) ||
+      !isBlank(worker?.executed)
+  );
+  if (crewWorkers.length === 0) {
+    return "Debe agregar al menos una persona en personal presente";
+  }
+  if (
+    crewWorkers.some(
+      (worker) =>
+        isBlank(worker?.name) ||
+        isBlank(worker?.role) ||
+        !worker?.hours ||
+        toNumber(worker.hours) <= 0 ||
+        worker?.executed === undefined ||
+        worker?.executed === null ||
+        String(worker.executed).trim() === "" ||
+        Number(worker.executed) < 0
+    )
+  ) {
+    return "Cada persona presente debe tener nombre, cargo, horas y ejecutado";
+  }
+
+  return "";
+}
+
 router.get("/", (req, res) => {
   db.all("SELECT * FROM daily_logs ORDER BY date DESC, id DESC", [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -77,6 +133,11 @@ router.post("/", (req, res) => {
     return res.status(400).json({
       error: "Falta master_item_id",
     });
+  }
+
+  const validationError = validateDailyLogPayload(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
 
   db.get(
@@ -189,6 +250,11 @@ router.put("/:id", (req, res) => {
     capataz_name,
     capataz_signature,
   } = req.body;
+
+  const validationError = validateDailyLogPayload(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
 
   db.get("SELECT * FROM daily_logs WHERE id = ?", [id], (err, oldLog) => {
     if (err) return res.status(500).json({ error: err.message });

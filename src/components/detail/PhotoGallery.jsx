@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Camera, Plus, X, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { usePermissions } from "@/lib/PermissionsContext";
 
 const SERVER_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001/api"
@@ -30,7 +31,7 @@ function getPhotoSrc(photo) {
 
 // Modal de confirmación con dos pasos
 function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
-  const [step, setStep] = useState(1); // 1: confirmar, 2: escribir palabra
+  const [step, setStep] = useState(1);
   const [inputWord, setInputWord] = useState("");
 
   const handleFirstConfirm = () => setStep(2);
@@ -52,10 +53,15 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <Trash2 className="h-6 w-6 text-red-600" />
             </div>
-            <h3 className="mb-1 text-base font-semibold">¿Eliminar esta foto?</h3>
+
+            <h3 className="mb-1 text-base font-semibold">
+              ¿Eliminar esta foto?
+            </h3>
+
             <p className="mb-6 text-sm text-muted-foreground">
               Esta acción es permanente y no se puede deshacer.
             </p>
+
             <div className="flex gap-3">
               <Button
                 variant="outline"
@@ -65,8 +71,9 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
               >
                 Cancelar
               </Button>
+
               <Button
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                className="flex-1 bg-red-600 text-white hover:bg-red-700"
                 onClick={handleFirstConfirm}
                 disabled={deleting}
               >
@@ -79,12 +86,19 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <Trash2 className="h-6 w-6 text-red-600" />
             </div>
-            <h3 className="mb-1 text-base font-semibold">Confirmación final</h3>
+
+            <h3 className="mb-1 text-base font-semibold">
+              Confirmación final
+            </h3>
+
             <p className="mb-4 text-sm text-muted-foreground">
               Escribe{" "}
-              <span className="font-mono font-bold text-red-600">{CONFIRM_WORD}</span>{" "}
+              <span className="font-mono font-bold text-red-600">
+                {CONFIRM_WORD}
+              </span>{" "}
               para eliminar permanentemente esta foto.
             </p>
+
             <Input
               value={inputWord}
               onChange={(e) => setInputWord(e.target.value)}
@@ -93,6 +107,7 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && handleDelete()}
             />
+
             <div className="flex gap-3">
               <Button
                 variant="outline"
@@ -102,8 +117,9 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
               >
                 Cancelar
               </Button>
+
               <Button
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                 onClick={handleDelete}
                 disabled={
                   inputWord.trim().toUpperCase() !== CONFIRM_WORD || deleting
@@ -124,6 +140,10 @@ export default function PhotoGallery({
   masterItemId,
   onPhotoAdded,
 }) {
+  const { canDelete, canCreateReport, canCreateItem } = usePermissions();
+
+  const canUploadPhotos = canCreateReport || canCreateItem;
+
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [photoToDelete, setPhotoToDelete] = useState(null);
@@ -134,6 +154,12 @@ export default function PhotoGallery({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!canUploadPhotos) {
+      alert("No tienes permiso para agregar fotos.");
+      event.target.value = "";
+      return;
+    }
+
     if (!masterItemId) {
       alert("No hay ítem asociado para guardar la foto.");
       event.target.value = "";
@@ -142,10 +168,13 @@ export default function PhotoGallery({
 
     try {
       setUploading(true);
+
       const uploadData = await api.uploadPhoto(file);
       const fileUrl = uploadData?.file_url;
 
-      if (!fileUrl) throw new Error("El servidor no devolvió la URL de archivo.");
+      if (!fileUrl) {
+        throw new Error("El servidor no devolvió la URL de archivo.");
+      }
 
       await api.post("/site-photos", {
         master_item_id: masterItemId,
@@ -166,11 +195,20 @@ export default function PhotoGallery({
   };
 
   const handleDeleteConfirm = async () => {
+    if (!canDelete) {
+      alert("No tienes permiso para eliminar fotos.");
+      setPhotoToDelete(null);
+      return;
+    }
+
     if (!photoToDelete) return;
+
     try {
       setDeleting(true);
+
       await api.delete(`/site-photos/${photoToDelete.id}`);
-      onPhotoAdded?.(); // refresca la galería
+
+      onPhotoAdded?.();
       setPhotoToDelete(null);
     } catch (error) {
       console.error("Error al eliminar foto:", error);
@@ -190,26 +228,28 @@ export default function PhotoGallery({
               Registro Fotográfico
             </CardTitle>
 
-            <div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 gap-1.5 text-xs"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Plus className="h-3 w-3" />
-                {uploading ? "Subiendo..." : "Agregar Foto"}
-              </Button>
+            {canUploadPhotos && (
+              <div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Plus className="h-3 w-3" />
+                  {uploading ? "Subiendo..." : "Agregar Foto"}
+                </Button>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleUpload}
-              />
-            </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleUpload}
+                />
+              </div>
+            )}
           </div>
         </CardHeader>
 
@@ -243,23 +283,26 @@ export default function PhotoGallery({
                     <Badge className="border-0 bg-white/20 text-[9px] text-white">
                       {labelMap[photo.label] || photo.label || "Otro"}
                     </Badge>
+
                     <p className="mt-0.5 text-[10px] text-white/80">
                       {photo.date || "Sin fecha"}
                     </p>
                   </div>
 
-                  {/* Botón borrar — esquina inferior derecha */}
-                  <button
-                    type="button"
-                    className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoToDelete(photo);
-                    }}
-                    title="Eliminar foto"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  {/* Botón borrar — solo usuarios con permiso */}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPhotoToDelete(photo);
+                      }}
+                      title="Eliminar foto"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -278,10 +321,14 @@ export default function PhotoGallery({
             variant="ghost"
             size="icon"
             className="absolute right-4 top-4 text-white hover:bg-white/20"
-            onClick={(e) => { e.stopPropagation(); setPreview(null); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreview(null);
+            }}
           >
             <X className="h-5 w-5" />
           </Button>
+
           <img
             src={getPhotoSrc(preview)}
             alt={preview.description || "Vista previa"}
@@ -291,7 +338,7 @@ export default function PhotoGallery({
         </div>
       )}
 
-      {photoToDelete && (
+      {photoToDelete && canDelete && (
         <DeleteConfirmModal
           photo={photoToDelete}
           onConfirm={handleDeleteConfirm}

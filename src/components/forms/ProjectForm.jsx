@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { usePermissions } from "@/lib/PermissionsContext";
 import { AutocompleteInput } from "@/components/ui/autocomplete-input";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
@@ -38,8 +38,9 @@ function normalizeProjectName(name) {
   return String(name || "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export default function ProjectForm({ open, onClose, onSave }) {
+export default function ProjectForm({ open, onClose, onSave, onDelete, editProject = null }) {
   const { canCreateProjects } = usePermissions();
+  const isEditing = Boolean(editProject);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
@@ -68,8 +69,26 @@ export default function ProjectForm({ open, onClose, onSave }) {
     if (!open) {
       setError("");
       setSaving(false);
+      setForm({ ...INITIAL_FORM });
+      return;
     }
-  }, [open]);
+
+    if (editProject) {
+      setForm({
+        name: editProject.name || "",
+        address: editProject.address || editProject.location || "",
+        client: editProject.client || "",
+        supervisor: editProject.supervisor || "",
+        capataz: editProject.capataz || "",
+        description: editProject.description || "",
+        status: editProject.status || "activa",
+        start_date: editProject.start_date || "",
+        end_date: editProject.end_date || "",
+      });
+    } else {
+      setForm({ ...INITIAL_FORM });
+    }
+  }, [open, editProject]);
 
   const updateFormField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -85,12 +104,29 @@ export default function ProjectForm({ open, onClose, onSave }) {
 
   const handleSave = async () => {
     const name = form.name.trim();
+    const requiredFields = [
+      ["address", "La ubicacion es obligatoria."],
+      ["client", "El cliente es obligatorio."],
+      ["supervisor", "Debe seleccionar un supervisor."],
+      ["capataz", "Debe seleccionar un capataz."],
+      ["start_date", "La fecha de inicio es obligatoria."],
+      ["end_date", "La fecha de termino es obligatoria."],
+      ["description", "La descripcion es obligatoria."],
+    ];
     const duplicateProject = projects.find(
-      (project) => normalizeProjectName(project.name) === normalizeProjectName(name)
+      (project) =>
+        normalizeProjectName(project.name) === normalizeProjectName(name) &&
+        Number(project.id) !== Number(editProject?.id)
     );
 
     if (!name) {
       setError("El nombre de la obra es obligatorio.");
+      return;
+    }
+
+    const missingField = requiredFields.find(([field]) => !String(form[field] || "").trim());
+    if (missingField) {
+      setError(missingField[1]);
       return;
     }
 
@@ -110,14 +146,7 @@ export default function ProjectForm({ open, onClose, onSave }) {
         client: form.client.trim(),
         supervisor: form.supervisor,
         capataz: form.capataz,
-        description:
-          form.description.trim() ||
-          [
-            form.supervisor ? `Supervisor: ${form.supervisor}` : "",
-            form.capataz ? `Capataz: ${form.capataz}` : "",
-          ]
-            .filter(Boolean)
-            .join(" | "),
+        description: form.description.trim(),
         status: form.status || "activa",
       };
 
@@ -125,8 +154,31 @@ export default function ProjectForm({ open, onClose, onSave }) {
       setForm({ ...INITIAL_FORM });
       onClose();
     } catch (error) {
-      console.error("Error al crear obra:", error);
-      setError(error?.message || "No se pudo crear la obra.");
+      console.error("Error al guardar obra:", error);
+      setError(error?.message || "No se pudo guardar la obra.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editProject || !onDelete) return;
+
+    const confirmed = window.confirm(
+      `¿Eliminar la obra "${editProject.name}"?\nEsta acción también eliminará sus ítems, reportes diarios y fotos.`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSaving(true);
+      setError("");
+      await onDelete(editProject);
+      setForm({ ...INITIAL_FORM });
+      onClose();
+    } catch (error) {
+      console.error("Error al eliminar obra:", error);
+      setError(error?.message || "No se pudo eliminar la obra.");
     } finally {
       setSaving(false);
     }
@@ -158,16 +210,30 @@ export default function ProjectForm({ open, onClose, onSave }) {
   const duplicateProject = form.name.trim()
     ? projects.find(
         (project) =>
-          normalizeProjectName(project.name) === normalizeProjectName(form.name)
+          normalizeProjectName(project.name) === normalizeProjectName(form.name) &&
+          Number(project.id) !== Number(editProject?.id)
       )
     : null;
-  const isFormInvalid = !form.name.trim() || Boolean(duplicateProject) || saving;
+  const requiredProjectFields = [
+    form.name,
+    form.address,
+    form.client,
+    form.supervisor,
+    form.capataz,
+    form.start_date,
+    form.end_date,
+    form.description,
+  ];
+  const isFormInvalid =
+    requiredProjectFields.some((value) => !String(value || "").trim()) ||
+    Boolean(duplicateProject) ||
+    saving;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva Obra</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar Obra" : "Nueva Obra"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -293,11 +359,22 @@ export default function ProjectForm({ open, onClose, onSave }) {
         </div>
 
         <DialogFooter>
+          {isEditing && onDelete && (
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={saving}
+              className="gap-2 sm:mr-auto"
+            >
+              <Trash2 className="h-4 w-4" />
+              Eliminar
+            </Button>
+          )}
           <Button variant="outline" onClick={handleClose} disabled={saving}>
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={isFormInvalid}>
-            {saving ? "Guardando..." : "Crear Obra"}
+            {saving ? "Guardando..." : isEditing ? "Guardar Cambios" : "Crear Obra"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,6 +13,106 @@ function stringifyArray(value) {
   return value;
 }
 
+function safeParseArray(value) {
+  try {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    return JSON.parse(value);
+  } catch {
+    return [];
+  }
+}
+
+function isBlank(value) {
+  return !String(value || "").trim();
+}
+
+function validateMasterItemPayload(payload) {
+  const requiredFields = [
+    [payload.project, "Debe seleccionar una obra/proyecto"],
+    [payload.tower, "Debe ingresar una torre"],
+    [payload.floor, "Debe seleccionar al menos un piso"],
+    [payload.activity, "Debe ingresar una actividad"],
+    [payload.start_date, "Debe ingresar la fecha de inicio"],
+    [payload.end_date, "Debe ingresar la fecha de termino"],
+    [payload.unit, "Debe ingresar una unidad"],
+    [payload.crew_name, "Debe ingresar el nombre de la cuadrilla"],
+    [payload.status, "Debe seleccionar un estado"],
+    [payload.release_status, "Debe seleccionar el estado de liberacion"],
+    [payload.observations, "Debe ingresar observaciones"],
+  ];
+  const missingField = requiredFields.find(([value]) => isBlank(value));
+  if (missingField) return missingField[1];
+
+  if (!payload.planned_qty || toNumber(payload.planned_qty) <= 0) {
+    return "Debe ingresar una cantidad planificada mayor a 0";
+  }
+
+  const crewMembers = safeParseArray(payload.crew_members).filter(
+    (member) => !isBlank(member?.name) || !isBlank(member?.role)
+  );
+  if (crewMembers.length === 0) {
+    return "Debe agregar al menos una persona en Integrantes de la Cuadrilla";
+  }
+  if (crewMembers.some((member) => isBlank(member?.name) || isBlank(member?.role))) {
+    return "Cada integrante de la cuadrilla debe tener nombre y cargo";
+  }
+
+  return "";
+}
+
+function validateDailyLogPayload(payload) {
+  const requiredFields = [
+    [payload.date, "Debe ingresar la fecha del reporte"],
+    [payload.supervisor, "Debe seleccionar un supervisor"],
+    [payload.crew_name, "Debe ingresar la cuadrilla"],
+    [payload.capataz_name, "Debe ingresar el nombre del capataz"],
+    [payload.observations, "Debe ingresar observaciones"],
+  ];
+  const missingField = requiredFields.find(([value]) => isBlank(value));
+  if (missingField) return missingField[1];
+
+  if (!payload.executed_today || toNumber(payload.executed_today) <= 0) {
+    return "Debe ingresar la cantidad ejecutada hoy";
+  }
+
+  if (!payload.hours_worked || toNumber(payload.hours_worked) <= 0) {
+    return "Debe ingresar las horas trabajadas";
+  }
+
+  if (payload.has_restriction && isBlank(payload.restriction_detail)) {
+    return "Debe ingresar el detalle de la restriccion";
+  }
+
+  const crewWorkers = safeParseArray(payload.crew_workers).filter(
+    (worker) =>
+      !isBlank(worker?.name) ||
+      !isBlank(worker?.role) ||
+      !isBlank(worker?.hours) ||
+      !isBlank(worker?.executed)
+  );
+  if (crewWorkers.length === 0) {
+    return "Debe agregar al menos una persona en personal presente";
+  }
+  if (
+    crewWorkers.some(
+      (worker) =>
+        isBlank(worker?.name) ||
+        isBlank(worker?.role) ||
+        !worker?.hours ||
+        toNumber(worker.hours) <= 0 ||
+        worker?.executed === undefined ||
+        worker?.executed === null ||
+        String(worker.executed).trim() === "" ||
+        Number(worker.executed) < 0
+    )
+  ) {
+    return "Cada persona presente debe tener nombre, cargo, horas y ejecutado";
+  }
+
+  return "";
+}
+
 function getFloorValues(floor) {
   const floors = String(floor || "")
     .split(",")
@@ -63,6 +163,11 @@ router.post("/", (req, res) => {
     status,
     release_status,
   } = req.body;
+
+  const validationError = validateMasterItemPayload(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
 
   const sql = `
     INSERT INTO master_items (
@@ -183,6 +288,11 @@ router.put("/:id", (req, res) => {
     status,
     release_status,
   } = req.body;
+
+  const validationError = validateMasterItemPayload(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
 
   const sql = `
     UPDATE master_items
@@ -312,6 +422,11 @@ router.post("/:id/daily-logs", (req, res) => {
     floor,
     activity,
   } = req.body;
+
+  const validationError = validateDailyLogPayload(req.body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
 
   db.get("SELECT * FROM master_items WHERE id = ?", [id], (err, item) => {
     if (err) return res.status(500).json({ error: err.message });

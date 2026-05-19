@@ -37,7 +37,7 @@ import { api } from '@/lib/api';
 
 export default function Workers() {
   const queryClient = useQueryClient();
-  const { hasAccessToProject, userRole } = usePermissions();
+  const { hasAccessToProject, userRole, canDelete } = usePermissions();
   const fileInputRef = useRef(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -45,18 +45,15 @@ export default function Workers() {
   const [form, setForm] = useState({ project: '', name: '', role: '' });
   const [formError, setFormError] = useState('');
 
-  // Estado edición
   const [showEditForm, setShowEditForm] = useState(false);
   const [editWorker, setEditWorker] = useState(null);
   const [editForm, setEditForm] = useState({ project: '', name: '', role: '' });
   const [editError, setEditError] = useState('');
 
-  // Estado selección masiva
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
-  // Estado importación
   const [showImportPreview, setShowImportPreview] = useState(false);
   const [importRows, setImportRows] = useState([]);
   const [importing, setImporting] = useState(false);
@@ -91,9 +88,7 @@ export default function Workers() {
       setForm({ project: '', name: '', role: '' });
       setFormError('');
     },
-    onError: (err) => {
-      setFormError(err.message || 'Error al guardar.');
-    },
+    onError: (err) => setFormError(err.message || 'Error al guardar.'),
   });
 
   const updateWorker = useMutation({
@@ -104,16 +99,12 @@ export default function Workers() {
       setEditWorker(null);
       setEditError('');
     },
-    onError: (err) => {
-      setEditError(err.message || 'Error al actualizar.');
-    },
+    onError: (err) => setEditError(err.message || 'Error al actualizar.'),
   });
 
   const deleteWorker = useMutation({
     mutationFn: (id) => api.delete(`/project-workers/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projectWorkers'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projectWorkers'] }),
   });
 
   const workerProductivity = {};
@@ -136,24 +127,16 @@ export default function Workers() {
       ? projectWorkers.filter(canSeeWorker)
       : projectWorkers.filter((w) => w.project === selectedProject && canSeeWorker(w));
 
-  const projectNames = [
-    ...new Set(projectWorkers.map((w) => w.project).filter(Boolean)),
-  ];
-  const allProjects = [
-    ...new Set([...filteredProjects.map((p) => p.name), ...projectNames]),
-  ];
+  const projectNames = [...new Set(projectWorkers.map((w) => w.project).filter(Boolean))];
+  const allProjects = [...new Set([...filteredProjects.map((p) => p.name), ...projectNames])];
 
-  // ── Selección masiva ──────────────────────────────────────────
   const allFilteredIds = filteredWorkers.map((w) => w.id);
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
   const someSelected = allFilteredIds.some((id) => selectedIds.has(id));
 
   const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(allFilteredIds));
-    }
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(allFilteredIds));
   };
 
   const toggleSelect = (id) => {
@@ -180,7 +163,6 @@ export default function Workers() {
       setBulkDeleting(false);
     }
   };
-  // ─────────────────────────────────────────────────────────────
 
   const handleOpenEdit = (w) => {
     setEditWorker(w);
@@ -189,9 +171,7 @@ export default function Workers() {
     setShowEditForm(true);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleImportClick = () => fileInputRef.current?.click();
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -219,7 +199,6 @@ export default function Workers() {
           setImportError('');
           setImportRows(parsed);
         }
-
         setImportProject(selectedProject !== 'all' ? selectedProject : '');
         setShowImportPreview(true);
       } catch (err) {
@@ -254,7 +233,6 @@ export default function Workers() {
       setShowImportPreview(false);
       setImportRows([]);
       setImportProject('');
-
       if (skipped.length > 0) {
         alert(`Importación completada.\nSe omitieron ${skipped.length} persona(s) por nombre duplicado:\n${skipped.join(', ')}`);
       }
@@ -302,33 +280,18 @@ export default function Workers() {
             </SelectContent>
           </Select>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={handleImportClick}
-          >
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleImportClick}>
             <FileSpreadsheet className="w-3 h-3" />
             Importar Excel/CSV
           </Button>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
           <Button
             size="sm"
             className="h-8 text-xs gap-1.5"
             onClick={() => {
-              setForm({
-                project: selectedProject !== 'all' ? selectedProject : '',
-                name: '',
-                role: '',
-              });
+              setForm({ project: selectedProject !== 'all' ? selectedProject : '', name: '', role: '' });
               setFormError('');
               setShowForm(true);
             }}
@@ -357,8 +320,7 @@ export default function Workers() {
                   </span>
                 </CardTitle>
 
-                {/* Botón eliminar seleccionados */}
-                {selectedIds.size > 0 && (
+                {canDelete && selectedIds.size > 0 && (
                   <Button
                     size="sm"
                     variant="destructive"
@@ -377,15 +339,16 @@ export default function Workers() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      {/* Checkbox seleccionar todo */}
-                      <TableHead className="w-8">
-                        <Checkbox
-                          checked={allSelected}
-                          onCheckedChange={toggleSelectAll}
-                          aria-label="Seleccionar todos"
-                          className={someSelected && !allSelected ? 'opacity-50' : ''}
-                        />
-                      </TableHead>
+                      {canDelete && (
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={toggleSelectAll}
+                            aria-label="Seleccionar todos"
+                            className={someSelected && !allSelected ? 'opacity-50' : ''}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead className="text-xs">Nombre completo</TableHead>
                       <TableHead className="text-xs">Cargo</TableHead>
                       <TableHead className="text-xs">Obra</TableHead>
@@ -396,7 +359,7 @@ export default function Workers() {
                   <TableBody>
                     {filteredWorkers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">
+                        <TableCell colSpan={canDelete ? 5 : 4} className="text-center text-sm text-muted-foreground py-12">
                           Sin personal registrado.
                         </TableCell>
                       </TableRow>
@@ -407,13 +370,15 @@ export default function Workers() {
                         key={w.id}
                         className={`hover:bg-muted/30 text-xs ${selectedIds.has(w.id) ? 'bg-muted/20' : ''}`}
                       >
-                        <TableCell>
-                          <Checkbox
-                            checked={selectedIds.has(w.id)}
-                            onCheckedChange={() => toggleSelect(w.id)}
-                            aria-label={`Seleccionar ${w.name}`}
-                          />
-                        </TableCell>
+                        {canDelete && (
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(w.id)}
+                              onCheckedChange={() => toggleSelect(w.id)}
+                              aria-label={`Seleccionar ${w.name}`}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="font-medium">{w.name}</TableCell>
                         <TableCell>{w.role || '—'}</TableCell>
                         <TableCell>
@@ -429,17 +394,19 @@ export default function Workers() {
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-red-400 hover:text-red-600"
-                              onClick={() =>
-                                window.confirm(`¿Eliminar a ${w.name}?`) &&
-                                deleteWorker.mutate(w.id)
-                              }
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-400 hover:text-red-600"
+                                onClick={() =>
+                                  window.confirm(`¿Eliminar a ${w.name}?`) &&
+                                  deleteWorker.mutate(w.id)
+                                }
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -509,40 +476,24 @@ export default function Workers() {
           <DialogHeader>
             <DialogTitle>Agregar Persona al Padrón</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Obra *</Label>
               <Select value={form.project} onValueChange={(v) => setForm({ ...form, project: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar obra" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar obra" /></SelectTrigger>
                 <SelectContent>
-                  {allProjects.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
+                  {allProjects.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <Label className="text-xs">Nombre completo *</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Ej: Juan Pérez González"
-              />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ej: Juan Pérez González" />
             </div>
-
             <div>
               <Label className="text-xs">Cargo</Label>
-              <Input
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                placeholder="Ej: Electricista"
-              />
+              <Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="Ej: Electricista" />
             </div>
-
             {formError && (
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
                 <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -550,13 +501,9 @@ export default function Workers() {
               </div>
             )}
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowForm(false); setFormError(''); }}>Cancelar</Button>
-            <Button
-              onClick={() => createWorker.mutate({ ...form, active: true })}
-              disabled={!form.project || !form.name || createWorker.isPending}
-            >
+            <Button onClick={() => createWorker.mutate({ ...form, active: true })} disabled={!form.project || !form.name || createWorker.isPending}>
               {createWorker.isPending ? 'Guardando...' : 'Guardar'}
             </Button>
           </DialogFooter>
@@ -569,40 +516,24 @@ export default function Workers() {
           <DialogHeader>
             <DialogTitle>Editar Persona</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Obra *</Label>
               <Select value={editForm.project} onValueChange={(v) => setEditForm({ ...editForm, project: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar obra" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Seleccionar obra" /></SelectTrigger>
                 <SelectContent>
-                  {allProjects.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
+                  {allProjects.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <Label className="text-xs">Nombre completo *</Label>
-              <Input
-                value={editForm.name}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                placeholder="Ej: Juan Pérez González"
-              />
+              <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} placeholder="Ej: Juan Pérez González" />
             </div>
-
             <div>
               <Label className="text-xs">Cargo</Label>
-              <Input
-                value={editForm.role}
-                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-                placeholder="Ej: Electricista"
-              />
+              <Input value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} placeholder="Ej: Electricista" />
             </div>
-
             {editError && (
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
                 <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
@@ -610,13 +541,9 @@ export default function Workers() {
               </div>
             )}
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowEditForm(false); setEditError(''); }}>Cancelar</Button>
-            <Button
-              onClick={() => updateWorker.mutate({ id: editWorker.id, data: editForm })}
-              disabled={!editForm.project || !editForm.name || updateWorker.isPending}
-            >
+            <Button onClick={() => updateWorker.mutate({ id: editWorker.id, data: editForm })} disabled={!editForm.project || !editForm.name || updateWorker.isPending}>
               {updateWorker.isPending ? 'Guardando...' : 'Guardar cambios'}
             </Button>
           </DialogFooter>
@@ -624,33 +551,27 @@ export default function Workers() {
       </Dialog>
 
       {/* Modal confirmación eliminación masiva */}
-      <Dialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Trash2 className="w-4 h-4 text-red-500" />
-              Eliminar {selectedIds.size} persona{selectedIds.size > 1 ? 's' : ''}
-            </DialogTitle>
-          </DialogHeader>
-
-          <p className="text-sm text-muted-foreground">
-            Esta acción eliminará permanentemente a las {selectedIds.size} personas seleccionadas del padrón. No se puede deshacer.
-          </p>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBulkConfirm(false)} disabled={bulkDeleting}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={bulkDeleting}
-            >
-              {bulkDeleting ? 'Eliminando...' : `Eliminar ${selectedIds.size}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {canDelete && (
+        <Dialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-red-500" />
+                Eliminar {selectedIds.size} persona{selectedIds.size > 1 ? 's' : ''}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Esta acción eliminará permanentemente a las {selectedIds.size} personas seleccionadas del padrón. No se puede deshacer.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowBulkConfirm(false)} disabled={bulkDeleting}>Cancelar</Button>
+              <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                {bulkDeleting ? 'Eliminando...' : `Eliminar ${selectedIds.size}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Modal previsualización importación */}
       <Dialog open={showImportPreview} onOpenChange={handleCloseImport}>
@@ -672,13 +593,9 @@ export default function Workers() {
               <div>
                 <Label className="text-xs">Obra destino *</Label>
                 <Select value={importProject} onValueChange={setImportProject}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar obra" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Seleccionar obra" /></SelectTrigger>
                   <SelectContent>
-                    {allProjects.map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
+                    {allProjects.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -711,14 +628,9 @@ export default function Workers() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseImport} disabled={importing}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={handleCloseImport} disabled={importing}>Cancelar</Button>
             {!importError && (
-              <Button
-                onClick={handleConfirmImport}
-                disabled={importing || !importProject}
-              >
+              <Button onClick={handleConfirmImport} disabled={importing || !importProject}>
                 {importing ? 'Importando...' : `Importar ${importRows.length} personas`}
               </Button>
             )}

@@ -43,8 +43,8 @@ const SERVER_URL = (
 ).replace(/\/api\/?$/, "");
 
 const REQUIRE_PHOTO = false;
-const REQUIRE_SIGNATURE = false;
-const REQUIRE_CAPATAZ = false;
+const REQUIRE_SIGNATURE = true;
+const REQUIRE_CAPATAZ = true;
 
 const EMPTY_WORKER = {
   name: "",
@@ -67,17 +67,30 @@ const getInitialForm = (userName = "") => ({
 
 function buildCrewWorkers(workers) {
   return workers
-    .filter((worker) => worker.name?.trim())
+    .filter((worker) => worker.name?.trim() && worker.role?.trim())
     .map((worker) => ({
       name: worker.name.trim(),
-      role: worker.role || "",
+      role: worker.role.trim(),
       hours: Number(worker.hours) || 0,
       executed: Number(worker.executed) || 0,
     }));
 }
 
+function getCrewMembers(masterItem) {
+  if (!masterItem?.crew_members) return [];
+  if (Array.isArray(masterItem.crew_members)) return masterItem.crew_members;
+
+  try {
+    const parsed = JSON.parse(masterItem.crew_members);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function calculateTotalHours(formHoursWorked, crewWorkers) {
   if (formHoursWorked) return Number(formHoursWorked);
+
   return crewWorkers.reduce((maxHours, worker) => {
     return Math.max(maxHours, Number(worker.hours || 0));
   }, 0);
@@ -85,9 +98,10 @@ function calculateTotalHours(formHoursWorked, crewWorkers) {
 
 function getRemainingQty(masterItem) {
   if (!masterItem) return 0;
+
   return Math.max(
     Number(masterItem.planned_qty || 0) - Number(masterItem.executed_qty || 0),
-    0,
+    0
   );
 }
 
@@ -96,7 +110,9 @@ function getPhotoSrc(photo) {
   if (photo.url?.startsWith("http")) return photo.url;
   if (photo.url?.startsWith("/uploads")) return `${SERVER_URL}${photo.url}`;
   if (photo.file_url?.startsWith("http")) return photo.file_url;
-  if (photo.file_url?.startsWith("/uploads")) return `${SERVER_URL}${photo.file_url}`;
+  if (photo.file_url?.startsWith("/uploads")) {
+    return `${SERVER_URL}${photo.file_url}`;
+  }
   return photo.url || photo.file_url || "";
 }
 
@@ -105,6 +121,7 @@ export default function DailyLogForm({
   onClose,
   onSave,
   masterItem,
+  project,
   userName,
 }) {
   const [form, setForm] = useState(getInitialForm(userName));
@@ -146,11 +163,11 @@ export default function DailyLogForm({
   const allWorkerData = [...allWorkers, ...logWorkers];
 
   const uniqueWorkerNames = Array.from(
-    new Set(allWorkerData.map((worker) => worker.name).filter(Boolean)),
+    new Set(allWorkerData.map((worker) => worker.name).filter(Boolean))
   ).sort();
 
   const uniqueWorkerRoles = Array.from(
-    new Set(allWorkerData.map((worker) => worker.role).filter(Boolean)),
+    new Set(allWorkerData.map((worker) => worker.role).filter(Boolean))
   ).sort();
 
   const fileInputRef = useRef(null);
@@ -168,20 +185,21 @@ export default function DailyLogForm({
 
     setForm({
       ...getInitialForm(userName),
+      supervisor: project?.supervisor || userName || "",
       crew_name: masterItem?.crew_name || "",
+      capataz_name: project?.capataz || "",
     });
 
-    if (
-      Array.isArray(masterItem?.crew_members) &&
-      masterItem.crew_members.length > 0
-    ) {
+    const crewMembers = getCrewMembers(masterItem);
+
+    if (crewMembers.length > 0) {
       setWorkers(
-        masterItem.crew_members.map((member) => ({
+        crewMembers.map((member) => ({
           name: member.name || "",
           role: member.role || "",
           hours: "",
           executed: "",
-        })),
+        }))
       );
     } else {
       setWorkers([]);
@@ -193,19 +211,28 @@ export default function DailyLogForm({
     setShowSignaturePad(false);
     setSignatureImage(null);
     setError("");
-  }, [open, masterItem, userName]);
+  }, [open, masterItem, project, userName]);
 
   const updateFormField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (error) setError("");
   };
 
-  const addWorker = () => setWorkers((prev) => [...prev, { ...EMPTY_WORKER }]);
-  const removeWorker = (index) => setWorkers((prev) => prev.filter((_, idx) => idx !== index));
-  const updateWorker = (index, field, value) =>
+  const addWorker = () => {
+    setWorkers((prev) => [...prev, { ...EMPTY_WORKER }]);
+  };
+
+  const removeWorker = (index) => {
+    setWorkers((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateWorker = (index, field, value) => {
     setWorkers((prev) =>
-      prev.map((worker, idx) => (idx === index ? { ...worker, [field]: value } : worker))
+      prev.map((worker, idx) =>
+        idx === index ? { ...worker, [field]: value } : worker
+      )
     );
+  };
 
   const handlePhotoUpload = async (event) => {
     const files = Array.from(event.target.files || []);
@@ -217,6 +244,7 @@ export default function DailyLogForm({
 
       for (const file of files) {
         const uploadedPhoto = await api.uploadPhoto(file);
+
         setPhotos((prev) => [
           ...prev,
           {
@@ -242,6 +270,7 @@ export default function DailyLogForm({
 
   const removePhoto = async (index) => {
     const photo = photos[index];
+
     if (photo.is_uploaded && photo.filename) {
       try {
         await api.delete(`/upload/${photo.filename}`);
@@ -249,25 +278,39 @@ export default function DailyLogForm({
         console.warn("No se pudo eliminar archivo temporal:", err.message);
       }
     }
+
     setPhotos((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const updatePhotoDescription = (index, value) =>
+  const updatePhotoDescription = (index, value) => {
     setPhotos((prev) =>
-      prev.map((photo, idx) => (idx === index ? { ...photo, description: value } : photo))
+      prev.map((photo, idx) =>
+        idx === index ? { ...photo, description: value } : photo
+      )
     );
+  };
 
   const getDailyGoalInfo = () => {
     if (!masterItem || !form.executed_today) return null;
+
     const remaining = getRemainingQty(masterItem);
     if (remaining <= 0) return null;
 
     let dailyGoal;
+
     if (masterItem.start_date && masterItem.end_date) {
       const totalDays =
-        differenceInCalendarDays(new Date(masterItem.end_date), new Date(masterItem.start_date)) + 1;
+        differenceInCalendarDays(
+          new Date(masterItem.end_date),
+          new Date(masterItem.start_date)
+        ) + 1;
+
       const daysPassed =
-        differenceInCalendarDays(new Date(form.date), new Date(masterItem.start_date)) + 1;
+        differenceInCalendarDays(
+          new Date(form.date),
+          new Date(masterItem.start_date)
+        ) + 1;
+
       const daysLeft = Math.max(totalDays - daysPassed + 1, 1);
       dailyGoal = Math.ceil(remaining / daysLeft);
     } else {
@@ -275,6 +318,7 @@ export default function DailyLogForm({
     }
 
     const todayQty = Number(form.executed_today) || 0;
+
     return {
       dailyGoal,
       todayQty,
@@ -290,24 +334,91 @@ export default function DailyLogForm({
       setError("");
 
       if (!masterItem) throw new Error("No hay ítem maestro asociado.");
-      if (!form.executed_today || Number(form.executed_today) <= 0)
+      if (!form.date) throw new Error("Debe ingresar la fecha del reporte.");
+      if (!form.supervisor?.trim()) {
+        throw new Error("Debe seleccionar un supervisor.");
+      }
+      if (!form.crew_name?.trim()) {
+        throw new Error("Debe ingresar la cuadrilla.");
+      }
+      if (!form.executed_today || Number(form.executed_today) <= 0) {
         throw new Error("Debe ingresar la cantidad ejecutada hoy.");
-      if (uploadingPhotos) throw new Error("Espera a que terminen de subir las fotos.");
+      }
+      if (!form.hours_worked || Number(form.hours_worked) <= 0) {
+        throw new Error("Debe ingresar las horas trabajadas.");
+      }
+      if (!form.observations.trim()) {
+        throw new Error("Debe ingresar observaciones.");
+      }
+      if (form.has_restriction && !form.restriction_detail.trim()) {
+        throw new Error("Debe ingresar el detalle de la restriccion.");
+      }
+      if (uploadingPhotos) {
+        throw new Error("Espera a que terminen de subir las fotos.");
+      }
 
       const remainingQty = getRemainingQty(masterItem);
       const executedToday = Number(form.executed_today);
 
-      if (remainingQty <= 0) throw new Error("Este ítem ya alcanzó la cantidad planificada.");
-      if (executedToday > remainingQty)
-        throw new Error(`La cantidad ejecutada hoy no puede superar el pendiente (${remainingQty} ${masterItem.unit || "und"}).`);
-      if (REQUIRE_PHOTO && photos.length === 0) throw new Error("Debe cargar al menos una foto del sitio.");
-      if (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) throw new Error("Debe ingresar el nombre del capataz.");
-      if (REQUIRE_SIGNATURE && !signatureImage) throw new Error("Debe dibujar la firma del capataz.");
+      if (remainingQty <= 0) {
+        throw new Error("Este ítem ya alcanzó la cantidad planificada.");
+      }
+
+      if (executedToday > remainingQty) {
+        throw new Error(
+          `La cantidad ejecutada hoy no puede superar el pendiente (${remainingQty} ${
+            masterItem.unit || "und"
+          }).`
+        );
+      }
+
+      if (REQUIRE_PHOTO && photos.length === 0) {
+        throw new Error("Debe cargar al menos una foto del sitio.");
+      }
+
+      if (REQUIRE_CAPATAZ && !form.capataz_name?.trim()) {
+        throw new Error("Debe ingresar el nombre del capataz.");
+      }
+
+      if (REQUIRE_SIGNATURE && !signatureImage) {
+        throw new Error("Debe dibujar la firma del capataz.");
+      }
 
       const crewWorkers = buildCrewWorkers(workers);
+
+      if (crewWorkers.length === 0) {
+        throw new Error("Debe agregar al menos una persona en personal presente.");
+      }
+
+      if (
+        workers.some((worker) => {
+          const hasAnyValue =
+            worker.name.trim() ||
+            worker.role.trim() ||
+            worker.hours ||
+            worker.executed;
+
+          return (
+            hasAnyValue &&
+            (!worker.name.trim() ||
+              !worker.role.trim() ||
+              !worker.hours ||
+              Number(worker.hours) <= 0 ||
+              !worker.executed ||
+              Number(worker.executed) < 0)
+          );
+        })
+      ) {
+        throw new Error(
+          "Cada persona presente debe tener nombre, cargo, horas y ejecutado."
+        );
+      }
+
       const totalHours = calculateTotalHours(form.hours_worked, crewWorkers);
 
-      if (totalHours > 10) throw new Error("No se pueden registrar más de 10 horas en un día.");
+      if (totalHours > 10) {
+        throw new Error("No se pueden registrar más de 10 horas en un día.");
+      }
 
       await onSave({
         ...form,
@@ -343,9 +454,37 @@ export default function DailyLogForm({
   const goalInfo = getDailyGoalInfo();
   const remainingQty = getRemainingQty(masterItem);
   const executedTodayQty = Number(form.executed_today || 0);
+  const isSupervisorFixed = Boolean(project?.supervisor);
+  const isCapatazFixed = Boolean(project?.capataz);
+  const isCrewNameFixed = Boolean(masterItem?.crew_name);
+
+  const hasInvalidWorker = workers.some((worker) => {
+    const hasAnyValue =
+      worker.name.trim() || worker.role.trim() || worker.hours || worker.executed;
+
+    return (
+      hasAnyValue &&
+      (!worker.name.trim() ||
+        !worker.role.trim() ||
+        !worker.hours ||
+        Number(worker.hours) <= 0 ||
+        !worker.executed ||
+        Number(worker.executed) < 0)
+    );
+  });
 
   const isSaveDisabled =
+    !form.date ||
+    !form.supervisor.trim() ||
+    !form.crew_name.trim() ||
     !form.executed_today ||
+    Number(form.executed_today) <= 0 ||
+    !form.hours_worked ||
+    Number(form.hours_worked) <= 0 ||
+    !form.observations.trim() ||
+    (form.has_restriction && !form.restriction_detail.trim()) ||
+    buildCrewWorkers(workers).length === 0 ||
+    hasInvalidWorker ||
     remainingQty <= 0 ||
     executedTodayQty > remainingQty ||
     saving ||
@@ -384,8 +523,9 @@ export default function DailyLogForm({
               <Select
                 value={form.supervisor}
                 onValueChange={(v) => updateFormField("supervisor", v)}
+                disabled={isSupervisorFixed}
               >
-                <SelectTrigger>
+                <SelectTrigger disabled={isSupervisorFixed}>
                   <SelectValue placeholder="Seleccionar supervisor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -402,6 +542,12 @@ export default function DailyLogForm({
                   )}
                 </SelectContent>
               </Select>
+
+              {isSupervisorFixed && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Supervisor fijado por la obra seleccionada.
+                </p>
+              )}
             </div>
           </div>
 
@@ -411,7 +557,14 @@ export default function DailyLogForm({
               value={form.crew_name}
               onChange={(e) => updateFormField("crew_name", e.target.value)}
               placeholder="Ej: Cuadrilla Eléctrica A"
+              disabled={isCrewNameFixed}
             />
+
+            {isCrewNameFixed && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Cuadrilla fijada por el ítem maestro.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -422,19 +575,41 @@ export default function DailyLogForm({
                 min="0"
                 max={remainingQty || undefined}
                 value={form.executed_today}
-                onChange={(e) => updateFormField("executed_today", e.target.value)}
+                onChange={(e) =>
+                  updateFormField("executed_today", e.target.value)
+                }
               />
+
               {masterItem && (
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   Máximo permitido: {remainingQty} {masterItem.unit || "und"}.
                 </p>
               )}
+
               {goalInfo && (
-                <div className={`mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${goalInfo.onTarget ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                <div
+                  className={`mt-1.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs ${
+                    goalInfo.onTarget
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
                   {goalInfo.onTarget ? (
-                    <><TrendingUp className="h-3 w-3" /><span>Dentro de meta. Meta: {goalInfo.dailyGoal} {masterItem?.unit || "und"}/día</span></>
+                    <>
+                      <TrendingUp className="h-3 w-3" />
+                      <span>
+                        Dentro de meta. Meta: {goalInfo.dailyGoal}{" "}
+                        {masterItem?.unit || "und"}/día
+                      </span>
+                    </>
                   ) : (
-                    <><TrendingDown className="h-3 w-3" /><span>Bajo meta. Meta: {goalInfo.dailyGoal} {masterItem?.unit || "und"}/día</span></>
+                    <>
+                      <TrendingDown className="h-3 w-3" />
+                      <span>
+                        Bajo meta. Meta: {goalInfo.dailyGoal}{" "}
+                        {masterItem?.unit || "und"}/día
+                      </span>
+                    </>
                   )}
                 </div>
               )}
@@ -447,17 +622,31 @@ export default function DailyLogForm({
                 step="0.5"
                 placeholder="Se calcula del personal si se deja vacío"
                 value={form.hours_worked}
-                onChange={(e) => updateFormField("hours_worked", e.target.value)}
+                onChange={(e) =>
+                  updateFormField("hours_worked", e.target.value)
+                }
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">Máximo recomendado: 10h/día.</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Máximo recomendado: 10h/día.
+              </p>
             </div>
           </div>
 
           {masterItem && (
             <div className="flex flex-wrap gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              <span><Target className="mr-0.5 inline h-3 w-3" />Total: <b>{masterItem.planned_qty} {masterItem.unit || "und"}</b></span>
-              <span>Ejecutado acum.: <b>{masterItem.executed_qty || 0}</b></span>
-              <span>Pendiente: <b>{remainingQty}</b></span>
+              <span>
+                <Target className="mr-0.5 inline h-3 w-3" />
+                Total:{" "}
+                <b>
+                  {masterItem.planned_qty} {masterItem.unit || "und"}
+                </b>
+              </span>
+              <span>
+                Ejecutado acum.: <b>{masterItem.executed_qty || 0}</b>
+              </span>
+              <span>
+                Pendiente: <b>{remainingQty}</b>
+              </span>
             </div>
           )}
 
@@ -467,29 +656,84 @@ export default function DailyLogForm({
                 <Users className="h-3.5 w-3.5" />
                 Personal presente
               </Label>
-              <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addWorker}>
-                <Plus className="h-3 w-3" />Agregar
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={addWorker}
+              >
+                <Plus className="h-3 w-3" />
+                Agregar
               </Button>
             </div>
 
             {workers.length === 0 && (
               <p className="py-2 text-xs italic text-muted-foreground">
-                Sin personal registrado. Puedes agregar trabajadores si lo necesitas.
+                Sin personal registrado. Puedes agregar trabajadores si lo
+                necesitas.
               </p>
             )}
 
             <div className="space-y-2">
               {workers.map((worker, index) => (
-                <div key={index} className="grid grid-cols-1 gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] sm:items-center sm:border-0 sm:p-0">
-                  <AutocompleteInput placeholder="Nombre" className="h-8 text-xs" value={worker.name} onChange={(e) => updateWorker(index, "name", e.target.value)} options={uniqueWorkerNames} />
-                  <AutocompleteInput placeholder="Cargo" className="h-8 text-xs" value={worker.role} onChange={(e) => updateWorker(index, "role", e.target.value)} options={uniqueWorkerRoles} />
-                  <Input type="number" placeholder="Horas" className="h-8 text-xs" value={worker.hours} onChange={(e) => updateWorker(index, "hours", e.target.value)} />
-                  <Input type="number" placeholder="Ejecutado" className="h-8 text-xs" value={worker.executed} onChange={(e) => updateWorker(index, "executed", e.target.value)} />
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 justify-self-end text-red-500" onClick={() => removeWorker(index)}>
+                <div
+                  key={index}
+                  className="grid grid-cols-1 gap-2 rounded-md border border-border/60 p-2 sm:grid-cols-[minmax(140px,1.4fr)_minmax(120px,1fr)_96px_112px_32px] sm:items-center sm:border-0 sm:p-0"
+                >
+                  <AutocompleteInput
+                    placeholder="Nombre"
+                    className="h-8 text-xs"
+                    value={worker.name}
+                    onChange={(e) =>
+                      updateWorker(index, "name", e.target.value)
+                    }
+                    options={uniqueWorkerNames}
+                  />
+
+                  <AutocompleteInput
+                    placeholder="Cargo"
+                    className="h-8 text-xs"
+                    value={worker.role}
+                    onChange={(e) =>
+                      updateWorker(index, "role", e.target.value)
+                    }
+                    options={uniqueWorkerRoles}
+                  />
+
+                  <Input
+                    type="number"
+                    placeholder="Horas"
+                    className="h-8 text-xs"
+                    value={worker.hours}
+                    onChange={(e) =>
+                      updateWorker(index, "hours", e.target.value)
+                    }
+                  />
+
+                  <Input
+                    type="number"
+                    placeholder="Ejecutado"
+                    className="h-8 text-xs"
+                    value={worker.executed}
+                    onChange={(e) =>
+                      updateWorker(index, "executed", e.target.value)
+                    }
+                  />
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 justify-self-end text-red-500"
+                    onClick={() => removeWorker(index)}
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               ))}
+
               {workers.length > 0 && (
                 <p className="hidden text-[10px] text-muted-foreground sm:block">
                   Columnas: Nombre / Cargo / Horas / Ejecutado
@@ -499,20 +743,35 @@ export default function DailyLogForm({
           </div>
 
           <div className="flex items-center gap-3">
-            <Switch checked={form.has_restriction} onCheckedChange={(value) => updateFormField("has_restriction", value)} />
+            <Switch
+              checked={form.has_restriction}
+              onCheckedChange={(value) =>
+                updateFormField("has_restriction", value)
+              }
+            />
             <Label className="text-xs">¿Tiene restricción?</Label>
           </div>
 
           {form.has_restriction && (
             <div>
               <Label className="text-xs">Detalle de restricción</Label>
-              <Textarea value={form.restriction_detail} onChange={(e) => updateFormField("restriction_detail", e.target.value)} className="h-16" />
+              <Textarea
+                value={form.restriction_detail}
+                onChange={(e) =>
+                  updateFormField("restriction_detail", e.target.value)
+                }
+                className="h-16"
+              />
             </div>
           )}
 
           <div>
             <Label className="text-xs">Observaciones</Label>
-            <Textarea value={form.observations} onChange={(e) => updateFormField("observations", e.target.value)} className="h-16" />
+            <Textarea
+              value={form.observations}
+              onChange={(e) => updateFormField("observations", e.target.value)}
+              className="h-16"
+            />
           </div>
 
           <div>
@@ -520,36 +779,91 @@ export default function DailyLogForm({
               <Label className="flex items-center gap-1.5 text-xs font-semibold">
                 <Camera className="h-3.5 w-3.5" />
                 Fotos del reporte{" "}
-                {REQUIRE_PHOTO ? <span className="text-destructive">*</span> : <span className="text-muted-foreground">(opcional)</span>}
+                {REQUIRE_PHOTO ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground">(opcional)</span>
+                )}
               </Label>
+
               <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => cameraInputRef.current?.click()} disabled={uploadingPhotos}>
-                  <Camera className="h-3 w-3" />Cámara
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploadingPhotos}
+                >
+                  <Camera className="h-3 w-3" />
+                  Cámara
                 </Button>
-                <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => fileInputRef.current?.click()} disabled={uploadingPhotos}>
-                  <Plus className="h-3 w-3" />{uploadingPhotos ? "Subiendo..." : "Galería"}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhotos}
+                >
+                  <Plus className="h-3 w-3" />
+                  {uploadingPhotos ? "Subiendo..." : "Galería"}
                 </Button>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} />
-              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
             </div>
 
             {REQUIRE_PHOTO && photos.length === 0 && (
-              <p className="text-xs font-medium italic text-destructive/70">Obligatorio cargar al menos una foto.</p>
+              <p className="text-xs font-medium italic text-destructive/70">
+                Obligatorio cargar al menos una foto.
+              </p>
             )}
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {photos.map((photo, index) => (
-                <div key={index} className="relative overflow-hidden rounded-lg border border-border">
-                  <img src={getPhotoSrc(photo)} alt={photo.description || "foto"} className="h-28 w-full object-cover" />
-                  <button type="button" className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white" onClick={() => removePhoto(index)}>
+                <div
+                  key={index}
+                  className="relative overflow-hidden rounded-lg border border-border"
+                >
+                  <img
+                    src={getPhotoSrc(photo)}
+                    alt={photo.description || "foto"}
+                    className="h-28 w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white"
+                    onClick={() => removePhoto(index)}
+                  >
                     <X className="h-3 w-3" />
                   </button>
+
                   <input
                     type="text"
                     placeholder="Descripción (opcional)"
                     value={photo.description}
-                    onChange={(e) => updatePhotoDescription(index, e.target.value)}
+                    onChange={(e) =>
+                      updatePhotoDescription(index, e.target.value)
+                    }
                     className="w-full border-t border-border bg-background px-2 py-1 text-[10px] focus:outline-none"
                   />
                 </div>
@@ -560,18 +874,23 @@ export default function DailyLogForm({
           <div className="space-y-3 border-t pt-4">
             <Label className="block text-xs font-semibold">
               Validación del Capataz{" "}
-              {!REQUIRE_CAPATAZ && <span className="text-muted-foreground">(opcional)</span>}
+              {!REQUIRE_CAPATAZ && (
+                <span className="text-muted-foreground">(opcional)</span>
+              )}
             </Label>
 
             <div>
               <Label className="text-xs">Nombre del capataz</Label>
+
               <Select
                 value={form.capataz_name}
                 onValueChange={(v) => updateFormField("capataz_name", v)}
+                disabled={isCapatazFixed}
               >
-                <SelectTrigger>
+                <SelectTrigger disabled={isCapatazFixed}>
                   <SelectValue placeholder="Seleccionar capataz" />
                 </SelectTrigger>
+
                 <SelectContent>
                   {capataces.length === 0 ? (
                     <SelectItem value="__none_c__" disabled>
@@ -586,44 +905,84 @@ export default function DailyLogForm({
                   )}
                 </SelectContent>
               </Select>
+
+              {isCapatazFixed && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Capataz fijado por la obra seleccionada.
+                </p>
+              )}
             </div>
 
             <div>
               <Label className="text-xs">
                 Firma del capataz{" "}
-                {!REQUIRE_SIGNATURE && <span className="text-muted-foreground">(opcional)</span>}
+                {REQUIRE_SIGNATURE ? (
+                  <span className="text-destructive">*</span>
+                ) : (
+                  <span className="text-muted-foreground">(opcional)</span>
+                )}
               </Label>
+
               {!showSignaturePad ? (
                 <>
                   {signatureImage ? (
                     <div className="flex items-end gap-2">
-                      <img src={signatureImage} alt="firma" className="h-16 rounded-lg border border-border bg-white p-2" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => setShowSignaturePad(true)}>Cambiar firma</Button>
+                      <img
+                        src={signatureImage}
+                        alt="firma"
+                        className="h-16 rounded-lg border border-border bg-white p-2"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSignaturePad(true)}
+                      >
+                        Cambiar firma
+                      </Button>
                     </div>
                   ) : (
-                    <Button type="button" variant="outline" className="w-full gap-2" onClick={() => setShowSignaturePad(true)}>
-                      <PenTool className="h-4 w-4" />Dibujar firma
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() => setShowSignaturePad(true)}
+                    >
+                      <PenTool className="h-4 w-4" />
+                      Dibujar firma
                     </Button>
                   )}
                 </>
               ) : (
                 <SignaturePad
-                  onSave={(signature) => { setSignatureImage(signature); setShowSignaturePad(false); }}
+                  onSave={(signature) => {
+                    setSignatureImage(signature);
+                    setShowSignaturePad(false);
+                  }}
                   onCancel={() => setShowSignaturePad(false)}
                 />
               )}
             </div>
 
             <p className="text-[10px] italic text-muted-foreground">
-              Más adelante podemos dejar esta validación como obligatoria para producción.
+              La firma se guardará como archivo PNG asociado al reporte diario.
+              No aparecerá en la galería fotográfica del ítem.
             </p>
           </div>
         </div>
 
         <DialogFooter className="border-t bg-background px-6 py-4">
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+
           <Button onClick={handleSave} disabled={isSaveDisabled}>
-            {saving ? "Guardando..." : uploadingPhotos ? "Subiendo fotos..." : "Guardar Reporte"}
+            {saving
+              ? "Guardando..."
+              : uploadingPhotos
+                ? "Subiendo fotos..."
+                : "Guardar Reporte"}
           </Button>
         </DialogFooter>
       </DialogContent>

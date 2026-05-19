@@ -1,4 +1,4 @@
-const DEFAULT_FLOORS = ["Piso 1", "Piso 2", "Piso 3", "Piso 4", "Piso 5"];
+const DEFAULT_FLOORS = Array.from({ length: 30 }, (_, index) => `Piso ${index + 1}`);
 
 export function getFloorList(floor) {
   return String(floor || "")

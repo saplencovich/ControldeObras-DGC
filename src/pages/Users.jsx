@@ -7,14 +7,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Shield, Plus, Trash2, Pencil, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Shield, Plus, Trash2, Pencil, AlertCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { Navigate } from 'react-router-dom';
@@ -27,12 +28,24 @@ const ROLES = [
 ];
 
 const roleBadgeClass = {
-  admin: 'bg-red-100 text-red-700 border-red-200',
-  supervisor: 'bg-blue-100 text-blue-700 border-blue-200',
-  viewer: 'bg-gray-100 text-gray-600 border-gray-200',
+  admin: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  supervisor: 'bg-amber-100 text-amber-700 border-amber-200',
+  viewer: 'bg-blue-100 text-blue-700 border-blue-200',
 };
 
-const emptyForm = { email: '', password: '', full_name: '', role: 'viewer' };
+const emptyForm = {
+  email: '',
+  password: '',
+  full_name: '',
+  role: 'viewer',
+  allowed_projects: [],
+};
+
+function parseAllowedProjects(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) return [value];
+  return [];
+}
 
 export default function Users() {
   const { isAdmin } = usePermissions();
@@ -44,12 +57,16 @@ export default function Users() {
   const [formError, setFormError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Redirigir si no es admin
   if (!isAdmin) return <Navigate to="/" replace />;
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => api.get('/users'),
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.get('/projects'),
   });
 
   const createUser = useMutation({
@@ -91,17 +108,31 @@ export default function Users() {
 
   const handleOpenEdit = (u) => {
     setEditUser(u);
-    setForm({ email: u.email, password: '', full_name: u.full_name, role: u.role });
+    setForm({
+      email: u.email || '',
+      password: '',
+      full_name: u.full_name || '',
+      role: u.role || 'viewer',
+      allowed_projects: parseAllowedProjects(u.allowed_projects),
+    });
     setFormError('');
     setShowPassword(false);
     setShowForm(true);
   };
 
   const handleSave = () => {
+    const payload = {
+      email: form.email,
+      full_name: form.full_name,
+      role: form.role,
+      allowed_projects: form.role === 'admin' ? [] : (Array.isArray(form.allowed_projects) ? form.allowed_projects : []),
+      ...(form.password ? { password: form.password } : {}),
+    };
+
     if (editUser) {
-      updateUser.mutate({ id: editUser.id, data: form });
+      updateUser.mutate({ id: editUser.id, data: payload });
     } else {
-      createUser.mutate(form);
+      createUser.mutate(payload);
     }
   };
 
@@ -133,7 +164,7 @@ export default function Users() {
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">
-            Usuarios registrados
+            Usuarios del Sistema
             <span className="ml-2 text-sm font-normal text-muted-foreground">
               ({users.length})
             </span>
@@ -148,6 +179,7 @@ export default function Users() {
                   <TableHead className="text-xs">Nombre</TableHead>
                   <TableHead className="text-xs">Correo</TableHead>
                   <TableHead className="text-xs">Rol</TableHead>
+                  <TableHead className="text-xs">Obras Permitidas</TableHead>
                   <TableHead className="text-xs">Estado</TableHead>
                   <TableHead className="text-xs text-right">Acciones</TableHead>
                 </TableRow>
@@ -156,51 +188,70 @@ export default function Users() {
               <TableBody>
                 {users.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">
+                    <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">
                       Sin usuarios registrados.
                     </TableCell>
                   </TableRow>
                 )}
 
-                {users.map((u) => (
-                  <TableRow key={u.id} className="hover:bg-muted/30 text-xs">
-                    <TableCell className="font-medium">{u.full_name}</TableCell>
-                    <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                    <TableCell>
-                      <Badge className={`text-[10px] border ${roleBadgeClass[u.role] || roleBadgeClass.viewer}`}>
-                        {ROLES.find((r) => r.value === u.role)?.label || u.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`text-[10px] ${u.active ? 'text-green-600 border-green-200' : 'text-gray-400'}`}>
-                        {u.active ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => handleOpenEdit(u)}
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-red-400 hover:text-red-600"
-                          onClick={() =>
-                            window.confirm(`¿Eliminar a ${u.full_name}?`) &&
-                            deleteUser.mutate(u.id)
-                          }
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {users.map((u) => {
+                  const allowed = parseAllowedProjects(u.allowed_projects);
+                  return (
+                    <TableRow key={u.id} className="hover:bg-muted/30 text-xs">
+                      <TableCell className="font-medium">{u.full_name || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                      <TableCell>
+                        <Badge className={`text-[10px] border ${roleBadgeClass[u.role] || roleBadgeClass.viewer}`}>
+                          {ROLES.find((r) => r.value === u.role)?.label || u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-xs">
+                        {u.role === 'admin' ? (
+                          <Badge variant="outline" className="text-xs">Todas las obras</Badge>
+                        ) : allowed.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {allowed.slice(0, 3).map((p) => (
+                              <Badge key={p} variant="outline" className="text-xs">{p}</Badge>
+                            ))}
+                            {allowed.length > 3 && (
+                              <Badge variant="outline" className="text-xs">+{allowed.length - 3}</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Sin acceso</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] ${u.active ? 'text-green-600 border-green-200' : 'text-gray-400'}`}>
+                          {u.active ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleOpenEdit(u)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600"
+                            onClick={() =>
+                              window.confirm(`¿Eliminar a ${u.full_name}?`) &&
+                              deleteUser.mutate(u.id)
+                            }
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -212,6 +263,11 @@ export default function Users() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editUser ? 'Editar Usuario' : 'Agregar Usuario'}</DialogTitle>
+            <DialogDescription>
+              {editUser
+                ? 'Actualiza los datos, rol y permisos del usuario.'
+                : 'Crea un usuario directamente en la base de datos local.'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -231,6 +287,7 @@ export default function Users() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="correo@dgc.cl"
+                disabled={!!editUser}
               />
             </div>
 
@@ -260,7 +317,7 @@ export default function Users() {
 
             <div>
               <Label className="text-xs">Rol *</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v, allowed_projects: [] })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar rol" />
                 </SelectTrigger>
@@ -270,7 +327,29 @@ export default function Users() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {form.role === 'viewer' && 'Acceso limitado a obras asignadas'}
+                {form.role === 'supervisor' && 'Acceso a múltiples obras asignadas'}
+                {form.role === 'admin' && 'Acceso completo a todo el sistema'}
+              </p>
             </div>
+
+            {form.role !== 'admin' && (
+              <div>
+                <Label className="text-xs">Obras Permitidas *</Label>
+                <MultiSelect
+                  options={projects.map((p) => ({ label: p.name, value: p.name }))}
+                  selected={Array.isArray(form.allowed_projects) ? form.allowed_projects : []}
+                  onChange={(selected) => setForm({ ...form, allowed_projects: selected })}
+                  placeholder="Seleccionar obras"
+                />
+                {(!Array.isArray(form.allowed_projects) || form.allowed_projects.length === 0) && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠️ Debes seleccionar al menos una obra
+                  </p>
+                )}
+              </div>
+            )}
 
             {formError && (
               <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-200 p-2">
@@ -290,6 +369,7 @@ export default function Users() {
                 !form.full_name ||
                 !form.email ||
                 (!editUser && !form.password) ||
+                (form.role !== 'admin' && (!Array.isArray(form.allowed_projects) || form.allowed_projects.length === 0)) ||
                 isPending
               }
             >

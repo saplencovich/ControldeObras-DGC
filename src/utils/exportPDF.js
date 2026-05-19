@@ -51,6 +51,54 @@ function addSectionTitle(doc, text, y) {
   return y + 12;
 }
 
+function emptyValue(value) {
+  return String(value || '').trim() || '—';
+}
+
+function projectByName(projects, projectName) {
+  return (projects || []).find((project) => project?.name === projectName) || null;
+}
+
+function drawProjectInfoCard(doc, project, x, y, w) {
+  const rows = [
+    ['Ubicación', emptyValue(project?.address || project?.location)],
+    ['Cliente', emptyValue(project?.client)],
+    ['Capataz', emptyValue(project?.capataz)],
+    ['Fecha Inicio', emptyValue(project?.start_date)],
+    ['Fecha Término', emptyValue(project?.end_date)],
+    ['Descripción', emptyValue(project?.description)],
+  ];
+  const valueX = x + 34;
+  const maxValueW = w - 39;
+  const rowLineGroups = rows.map(([label, value]) => [
+    label,
+    doc.splitTextToSize(String(value), maxValueW),
+  ]);
+  const rowHeights = rowLineGroups.map(([, lines]) => Math.max(6, lines.length * 3.6 + 2));
+  const cardH = rowHeights.reduce((sum, height) => sum + height, 0) + 6;
+
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(x, y, w, cardH, 1.5, 1.5, 'F');
+  doc.setDrawColor(210, 220, 240);
+  doc.setLineWidth(0.15);
+  doc.roundedRect(x, y, w, cardH, 1.5, 1.5, 'S');
+
+  let rowY = y + 5;
+  rowLineGroups.forEach(([label, lines], index) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.setTextColor(85, 96, 125);
+    doc.text(label, x + 3, rowY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.6);
+    doc.setTextColor(25, 35, 65);
+    doc.text(lines, valueX, rowY);
+    rowY += rowHeights[index];
+  });
+
+  return cardH;
+}
+
 async function renderPhotos(doc, photos, y, today, logoData) {
   if (photos.length === 0) return y;
 
@@ -132,7 +180,183 @@ async function loadLogoDataUrl() {
   });
 }
 
-export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], checklistEntries = []) {
+/** Portada profesional a página completa (página 1 exclusiva). */
+function drawCoverPage(doc, {
+  today,
+  todayShort,
+  logoData,
+  masterItems,
+  dailyLogs,
+  byProject,
+  globalPct,
+  lastLogDate,
+  userName = '',
+  showIncludedProjects = true,
+}) {
+  const projectNames = Object.keys(byProject);
+  const docCode = `DGC-INF-${todayShort.replace(/-/g, '')}`;
+  const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm');
+
+  doc.setFillColor(13, 27, 64);
+  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+
+  doc.setFillColor(234, 179, 8);
+  doc.rect(0, 0, PAGE_W, 5, 'F');
+
+  doc.setFillColor(20, 38, 82);
+  doc.rect(0, 5, 10, PAGE_H - 5, 'F');
+
+  doc.setFillColor(30, 55, 110);
+  doc.rect(PAGE_W - 48, 5, 48, 48, 'F');
+
+  let titleY = 58;
+  if (logoData) {
+    const logoH = 34;
+    const logoW = Math.min(logoH * logoData.aspect, 78);
+    const logoDrawH = logoW / logoData.aspect;
+    doc.addImage(
+      logoData.dataUrl,
+      'PNG',
+      PAGE_W / 2 - logoW / 2,
+      32,
+      logoW,
+      logoDrawH
+    );
+    titleY = 32 + logoDrawH + 20;
+  }
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(30);
+  doc.setTextColor(255, 255, 255);
+  doc.text('INFORME DE', PAGE_W / 2, titleY, { align: 'center' });
+  doc.text('CONTROL DE OBRA', PAGE_W / 2, titleY + 13, { align: 'center' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+  doc.setTextColor(186, 200, 228);
+  doc.text(
+    'Gestión de avance · Obras eléctricas · Control de Obras DGC',
+    PAGE_W / 2,
+    titleY + 24,
+    { align: 'center' }
+  );
+
+  const accentY = titleY + 34;
+  doc.setFillColor(234, 179, 8);
+  doc.rect(PAGE_W / 2 - 42, accentY, 84, 1.4, 'F');
+
+  const cardX = M + 10;
+  const cardW = CW - 20;
+  const cardY = accentY + 14;
+  const cardH = 88;
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'F');
+  doc.setDrawColor(210, 218, 232);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'S');
+
+  doc.setFillColor(13, 27, 64);
+  doc.roundedRect(cardX, cardY, cardW, 11, 4, 4, 'F');
+  doc.rect(cardX, cardY + 6, cardW, 5, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text('FICHA DEL INFORME', cardX + 8, cardY + 7.5);
+
+  let cy = cardY + 18;
+  const metaRows = [
+    ['Fecha de emisión', today],
+    ['Código', docCode],
+    ['Último reporte', lastLogDate],
+    ['Proyectos', `${projectNames.length}`],
+    ['Actividades / Reportes', `${masterItems.length} / ${dailyLogs.length}`],
+    ['Avance global', `${globalPct.toFixed(1)}%`],
+  ];
+
+  metaRows.forEach(([label, value]) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 112, 140);
+    doc.text(label, cardX + 8, cy);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(25, 35, 65);
+    doc.text(String(value), cardX + 52, cy);
+    cy += 8;
+  });
+
+  let lines = [];
+  if (showIncludedProjects && projectNames.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(13, 27, 64);
+    doc.text('Obras incluidas:', cardX + 8, cy + 2);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(55, 65, 95);
+    const preview = projectNames.slice(0, 5).join('  ·  ');
+    const suffix = projectNames.length > 5 ? `  (+${projectNames.length - 5} más)` : '';
+    lines = doc.splitTextToSize(preview + suffix, cardW - 16);
+    doc.text(lines, cardX + 8, cy + 7);
+    cy += lines.length * 4 + 9;
+  }
+  
+  const issuedBy = userName;
+  if (issuedBy) {
+    if (!showIncludedProjects || projectNames.length === 0) cy += 4;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(13, 27, 64);
+    doc.text('Emitido por:', cardX + 8, cy);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(25, 35, 65);
+    doc.text(issuedBy, cardX + 52, cy);
+  }
+
+  const barY = PAGE_H - 52;
+  doc.setFillColor(234, 179, 8);
+  doc.rect(0, barY, PAGE_W, 2, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(234, 179, 8);
+  doc.text('DOCUMENTO CONFIDENCIAL — USO INTERNO', PAGE_W / 2, PAGE_H - 38, { align: 'center' });
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.setTextColor(175, 188, 215);
+  doc.text(
+    `Generado automáticamente · Control de Obras DGC · ${generatedAt}`,
+    PAGE_W / 2,
+    PAGE_H - 30,
+    { align: 'center' }
+  );
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(140, 155, 185);
+  doc.text(
+    'La reproducción parcial o total requiere autorización del área responsable.',
+    PAGE_W / 2,
+    PAGE_H - 22,
+    { align: 'center' }
+  );
+}
+
+export async function exportReportPDF(
+  masterItems,
+  dailyLogs,
+  sitePhotos = [],
+  checklistEntries = [],
+  projectsOrUserName = '',
+  userNameArg = '',
+  options = {}
+) {
+  const projects = Array.isArray(projectsOrUserName) ? projectsOrUserName : [];
+  const userName = Array.isArray(projectsOrUserName) ? userNameArg : projectsOrUserName;
+  const showIncludedProjects = options.showIncludedProjects !== false;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
@@ -158,30 +382,27 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
   });
 
   // ══════════════════════════════════════════════════════════════
-  // SECCIÓN 1: PORTADA + RESUMEN GLOBAL
+  // PÁGINA 1: PORTADA PROFESIONAL (solo portada)
   // ══════════════════════════════════════════════════════════════
-  doc.setFillColor(13, 27, 64);
-  doc.rect(0, 0, PAGE_W, 35, 'F');
-  doc.setFillColor(234, 179, 8);
-  doc.rect(0, 34.5, PAGE_W, 2, 'F');
+  drawCoverPage(doc, {
+    today,
+    todayShort,
+    logoData,
+    masterItems,
+    dailyLogs,
+    byProject,
+    globalPct,
+    lastLogDate,
+    userName,
+    showIncludedProjects,
+  });
 
-  // Logo en portada (esquina superior derecha)
-  if (logoData) {
-    const logoH = 20;
-    const logoW = logoH * logoData.aspect;
-    doc.addImage(logoData.dataUrl, 'PNG', PAGE_W - M - logoW, 7, logoW, logoH);
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(255, 255, 255);
-  doc.text('INFORME DE AVANCE DE OBRA', M, 16);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(180, 200, 230);
-  doc.text(`Obras Eléctricas  ·  ${today}  ·  Último reporte: ${lastLogDate}`, M, 26);
-
-  let y = 44;
+  // ══════════════════════════════════════════════════════════════
+  // PÁGINA 2+: RESUMEN EJECUTIVO Y DETALLE
+  // ══════════════════════════════════════════════════════════════
+  doc.addPage();
+  let y = addPageHeader(doc, today, logoData);
+  y = addSectionTitle(doc, 'RESUMEN EJECUTIVO', y);
 
   // KPI cards
   const kpis = [
@@ -251,6 +472,11 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
     doc.text(`${projPct.toFixed(1)}%`, M + CW - 3, y + 5.5, { align: 'right' });
 
     y += 10;
+    if (y + 46 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
+
+    const project = projectByName(projects, projectName);
+    const infoCardH = drawProjectInfoCard(doc, project, M + 3, y, CW - 6);
+    y += infoCardH + 5;
   }
 
   // ══════════════════════════════════════════════════════════════

@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
   const [showDailyLog, setShowDailyLog] = useState(false);
+  const [editProject, setEditProject] = useState(null);
   const [editItem, setEditItem] = useState(null);
   const [dailyLogItem, setDailyLogItem] = useState(null);
 
@@ -120,6 +121,25 @@ export default function Dashboard() {
     mutationFn: (data) => api.post("/projects", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+
+  const updateProject = useMutation({
+    mutationFn: ({ id, data }) => api.put(`/projects/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["masterItems"] });
+      queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
+    },
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: (id) => api.delete(`/projects/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["masterItems"] });
+      queryClient.invalidateQueries({ queryKey: ["dailyLogs"] });
+      queryClient.invalidateQueries({ queryKey: ["sitePhotos"] });
     },
   });
 
@@ -195,7 +215,7 @@ export default function Dashboard() {
   const filteredItemIds = new Set(filteredItems.map((i) => Number(i.id)));
   const filteredLogs = dailyLogs.filter((log) => {
     if (!filteredItemIds.has(Number(log.master_item_id))) return false;
-    if (filters.floor && log.floor !== filters.floor) return false;
+    if (!itemHasFloor(log.floor, filters.floor)) return false;
 
     return true;
   });
@@ -257,6 +277,45 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error al guardar ítem:", error);
     }
+  };
+
+  const handleOpenNewProject = () => {
+    setEditProject(null);
+    setShowProjectForm(true);
+  };
+
+  const handleOpenEditProject = (selectedProject) => {
+    const project =
+      selectedProject || projects.find((p) => p.name === filters.project);
+    if (!project) return;
+
+    setEditProject(project);
+    setShowProjectForm(true);
+  };
+
+  const handleSaveProject = async (data) => {
+    if (editProject) {
+      const previousName = editProject.name;
+      await updateProject.mutateAsync({ id: editProject.id, data });
+
+      if (filters.project === previousName) {
+        setFilters((prev) => ({ ...prev, project: data.name }));
+      }
+
+      setEditProject(null);
+      return;
+    }
+
+    await createProject.mutateAsync(data);
+  };
+
+  const handleDeleteProject = async (project) => {
+    await deleteProject.mutateAsync(project.id);
+    setFilters((prev) => ({
+      ...prev,
+      project: prev.project === project.name ? "" : prev.project,
+    }));
+    setEditProject(null);
   };
 
   const handleSaveItemAndLog = async (data) => {
@@ -413,9 +472,12 @@ export default function Dashboard() {
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
+        filterOptionItems={masterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
-        onNewProject={() => setShowProjectForm(true)}
+        userName={user?.full_name || ''}
+        onNewProject={handleOpenNewProject}
+        onEditProject={handleOpenEditProject}
         onNewItem={() => {
           setEditItem(null);
           setShowItemForm(true);
@@ -446,8 +508,13 @@ export default function Dashboard() {
 
       <ProjectForm
         open={showProjectForm}
-        onClose={() => setShowProjectForm(false)}
-        onSave={(data) => createProject.mutateAsync(data)}
+        onClose={() => {
+          setShowProjectForm(false);
+          setEditProject(null);
+        }}
+        onSave={handleSaveProject}
+        onDelete={handleDeleteProject}
+        editProject={editProject}
       />
 
       <MasterItemForm
@@ -495,6 +562,7 @@ export default function Dashboard() {
           return log;
         }}
         masterItem={dailyLogItem}
+        project={projects.find((p) => p.name === dailyLogItem?.project)}
         userName={user?.full_name}
       />
     </div>

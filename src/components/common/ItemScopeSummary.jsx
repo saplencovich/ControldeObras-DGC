@@ -83,15 +83,7 @@ export default function ItemScopeSummary({ item, className, hideActivity = false
         )}
 
         {!hasManyFloors &&
-          visibleFloors.map((floor) => (
-            <Badge
-              key={floor}
-              variant="outline"
-              className="bg-background text-[11px] font-medium"
-            >
-              {floor}
-            </Badge>
-          ))}
+          visibleFloors.map((floor) => null)}
       </div>
     </div>
   );

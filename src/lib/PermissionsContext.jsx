@@ -7,7 +7,8 @@ export function PermissionsProvider({ children }) {
   const { user: currentUser, isLoadingAuth } = useAuth();
 
   const value = useMemo(() => {
-    const userRole = currentUser?.role || 'viewer';
+    const rawRole = String(currentUser?.role || 'viewer').trim().toLowerCase();
+    const userRole = rawRole === 'administrador' ? 'admin' : rawRole;
     const allowedProjects = currentUser?.allowed_projects || [];
 
     const isAdmin = userRole === 'admin';
@@ -25,12 +26,20 @@ export function PermissionsProvider({ children }) {
       allowedProjects,
       isLoading: isLoadingAuth,
       hasAccessToProject,
-      canEditUsers: isAdmin,
-      canCreateProjects: isAdmin || isSupervisor,
-      canDeleteItems: isAdmin || isSupervisor,
       isAdmin,
       isSupervisor,
       isViewer,
+      canEditUsers: isAdmin,
+      canCreateProjects: isAdmin || isSupervisor,
+      canCreateItems: isAdmin || isSupervisor || isViewer,
+      canCreateReports: isAdmin || isSupervisor || isViewer,
+      canDelete: isAdmin,
+      canViewPersonal: isAdmin || isSupervisor,
+      canManagePersonal: isAdmin || isSupervisor,
+      canExport: isAdmin || isSupervisor,
+      canViewProductivity: isAdmin || isSupervisor,
+      showPersonalNav: isAdmin || isSupervisor,
+      showUsersNav: isAdmin,
     };
   }, [currentUser, isLoadingAuth]);
 
