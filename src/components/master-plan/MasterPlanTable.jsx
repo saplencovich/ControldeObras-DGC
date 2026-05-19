@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -46,6 +46,8 @@ const statusLabel = {
   completado: "Completado",
   bloqueado: "Bloqueado",
 };
+
+const PAGE_SIZE = 20;
 
 function getProgressPct(item) {
   const planned = Number(item?.planned_qty || 0);
@@ -153,8 +155,24 @@ export default function MasterPlanTable({
   onDeleteLog,
 }) {
   const [expandedItems, setExpandedItems] = useState({});
+  const [page, setPage] = useState(1);
   const { canDelete } = usePermissions();
   const displayRows = useMemo(() => buildRowsForFloors(items), [items]);
+  const totalPages = Math.max(1, Math.ceil(displayRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return displayRows.slice(start, start + PAGE_SIZE);
+  }, [displayRows, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+    setExpandedItems({});
+  }, [items]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const projectSupervisorByName = useMemo(() => {
     return projects.reduce((acc, project) => {
@@ -215,6 +233,11 @@ export default function MasterPlanTable({
           <Badge variant="secondary" className="ml-2 text-xs">
             {items.length} ítems
           </Badge>
+          {displayRows.length > PAGE_SIZE && (
+            <Badge variant="outline" className="ml-1 text-xs">
+              Pág. {safePage}/{totalPages}
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
 
@@ -225,7 +248,7 @@ export default function MasterPlanTable({
               No hay ítems en el plan maestro. Crea uno nuevo para comenzar.
             </div>
           )}
-          {displayRows.map((row) => {
+          {pageRows.map((row) => {
             const pct =
               row.planned_qty > 0
                 ? Math.round(((row.executed_qty || 0) / row.planned_qty) * 100)
@@ -377,7 +400,7 @@ export default function MasterPlanTable({
                 </TableRow>
               )}
 
-              {displayRows.map((row) => {
+              {pageRows.map((row) => {
                 const itemId = Number(row.id);
                 const pct = getProgressPct(row);
                 const prodColor = getProductivityColor(pct);
@@ -611,6 +634,39 @@ export default function MasterPlanTable({
             </TableBody>
           </Table>
         </div>
+
+        {displayRows.length > PAGE_SIZE && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+            <p className="text-xs text-muted-foreground">
+              Mostrando {pageRows.length} de {displayRows.length} filas del plan maestro
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-xs tabular-nums">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

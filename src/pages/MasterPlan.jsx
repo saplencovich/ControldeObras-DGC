@@ -238,6 +238,7 @@ export default function MasterPlan() {
           queryClient.invalidateQueries({ queryKey: ['masterItems'] });
           queryClient.invalidateQueries({ queryKey: ['dailyLogs'] });
         }}
+        showPdfExport={false}
       />
 
       <MasterPlanTable

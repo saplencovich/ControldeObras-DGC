@@ -124,11 +124,15 @@ export default function FilterBar({
   filterOptionItems = masterItems,
   dailyLogs = [],
   sitePhotos = [],
+  pdfMasterItems = masterItems,
+  pdfDailyLogs = dailyLogs,
+  pdfSitePhotos = sitePhotos,
   onNewProject,
   onEditProject,
   onNewItem,
   onRefresh,
   userName = '',
+  showPdfExport = true,
 }) {
   const { canCreateProjects, isAdmin } = usePermissions();
 
@@ -292,19 +296,23 @@ export default function FilterBar({
             Nuevo Item
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() =>
-              exportReportPDF(masterItems, dailyLogs, sitePhotos, [], projects, userName, {
-                showIncludedProjects: false,
-              })
-            }
-          >
-            <Download className="h-3 w-3" />
-            Exportar PDF
-          </Button>
+          {showPdfExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() =>
+                exportReportPDF(pdfMasterItems, pdfDailyLogs, pdfSitePhotos, [], projects, userName, {
+                  showIncludedProjects: false,
+                  includeDailyReports: false,
+                  includePhotos: false,
+                })
+              }
+            >
+              <Download className="h-3 w-3" />
+              Exportar PDF
+            </Button>
+          )}
 
           <Button
             variant="outline"

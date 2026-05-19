@@ -6,6 +6,11 @@ const PAGE_W = 210;
 const PAGE_H = 297;
 const M = 12;
 const CW = PAGE_W - M * 2;
+const SERVER_URL = (
+  import.meta.env?.VITE_API_URL || 'http://localhost:3001/api'
+).replace(/\/api\/?$/, '');
+const PAGE_BOTTOM = PAGE_H - 14;
+const REPORT_SIGNATURE_TOP = PAGE_H - 54;
 
 function statusLabel(s) {
   return { pendiente: 'Pendiente', en_ejecucion: 'En ejecución', completado: 'Completado', bloqueado: 'Bloqueado' }[s] || s || '—';
@@ -55,6 +60,44 @@ function emptyValue(value) {
   return String(value || '').trim() || '—';
 }
 
+function resolveImageSrc(value) {
+  if (!value || typeof value !== 'string') return '';
+  if (value.startsWith('data:image/')) return value;
+  if (value.startsWith('http')) return value;
+  if (value.startsWith('/uploads')) return `${SERVER_URL}${value}`;
+  return value;
+}
+
+async function loadImageForPdf(src) {
+  const resolvedSrc = resolveImageSrc(src);
+  if (!resolvedSrc) return null;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve({
+          dataUrl: canvas.toDataURL('image/png'),
+          aspect: canvas.width / canvas.height,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = resolvedSrc;
+  });
+}
+
+function addPdfImage(doc, imageData, x, y, w, h) {
+  doc.addImage(imageData.dataUrl, 'PNG', x, y, w, h);
+}
+
 function projectByName(projects, projectName) {
   return (projects || []).find((project) => project?.name === projectName) || null;
 }
@@ -99,8 +142,10 @@ function drawProjectInfoCard(doc, project, x, y, w) {
   return cardH;
 }
 
-async function renderPhotos(doc, photos, y, today, logoData) {
+async function renderPhotos(doc, photos, y, today, logoData, options = {}) {
   if (photos.length === 0) return y;
+
+  const bottomLimit = options.bottomLimit || PAGE_BOTTOM;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
@@ -114,9 +159,9 @@ async function renderPhotos(doc, photos, y, today, logoData) {
   let rowStartY = y;
 
   for (const photo of photos) {
-    if (!photo.file_url) continue;
+    if (!photo.file_url && !photo.url) continue;
     if (photoCol === 0) {
-      if (y + photoH + 10 > PAGE_H - 14) {
+      if (y + photoH + 10 > bottomLimit) {
         doc.addPage();
         y = addPageHeader(doc, today, logoData);
       }
@@ -125,28 +170,20 @@ async function renderPhotos(doc, photos, y, today, logoData) {
     const px = M + 4 + photoCol * (photoW + 3);
     const py = rowStartY;
 
-    await new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        doc.setDrawColor(200, 205, 215);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'S');
-        const aspect = img.width / img.height;
-        let iW = photoW - 2; let iH = iW / aspect;
-        if (iH > photoH - 2) { iH = photoH - 2; iW = iH * aspect; }
-        doc.addImage(img, 'JPEG', px + (photoW - iW) / 2, py + 1, iW, iH);
-        resolve();
-      };
-      img.onerror = () => {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'F');
-        doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-        doc.text('[no disponible]', px + photoW / 2, py + photoH / 2, { align: 'center' });
-        resolve();
-      };
-      img.src = photo.file_url;
-    });
+    const imageData = await loadImageForPdf(photo.file_url || photo.url);
+    if (imageData) {
+      doc.setDrawColor(200, 205, 215);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'S');
+      let iW = photoW - 2; let iH = iW / imageData.aspect;
+      if (iH > photoH - 2) { iH = photoH - 2; iW = iH * imageData.aspect; }
+      addPdfImage(doc, imageData, px + (photoW - iW) / 2, py + 1, iW, iH);
+    } else {
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'F');
+      doc.setFontSize(6); doc.setTextColor(150, 150, 150);
+      doc.text('[no disponible]', px + photoW / 2, py + photoH / 2, { align: 'center' });
+    }
 
     if (photo.description) {
       doc.setFont('helvetica', 'normal');
@@ -160,6 +197,61 @@ async function renderPhotos(doc, photos, y, today, logoData) {
   }
   if (photoCol > 0) y = rowStartY + photoH + 7;
   return y;
+}
+
+function ensureSpace(doc, y, needed, today, logoData, bottomLimit = PAGE_BOTTOM) {
+  if (y + needed <= bottomLimit) return y;
+  doc.addPage();
+  return addPageHeader(doc, today, logoData);
+}
+
+async function drawCapatazSignature(doc, log) {
+  const blockX = M;
+  const blockY = PAGE_H - 48;
+  const blockW = CW;
+  const blockH = 34;
+  const signature = await loadImageForPdf(log.capataz_signature);
+
+  doc.setDrawColor(210, 218, 235);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(blockX, blockY, blockW, blockH, 1.5, 1.5, 'S');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6.5);
+  doc.setTextColor(40, 60, 110);
+  doc.text('Firma del capataz', blockX + 5, blockY + 6);
+
+  const sigBoxX = blockX + 5;
+  const sigBoxY = blockY + 8;
+  const sigBoxW = 64;
+  const sigBoxH = 16;
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(sigBoxX, sigBoxY, sigBoxW, sigBoxH, 1, 1, 'F');
+
+  if (signature) {
+    let sigW = sigBoxW - 6;
+    let sigH = sigW / signature.aspect;
+    if (sigH > sigBoxH - 3) { sigH = sigBoxH - 3; sigW = sigH * signature.aspect; }
+    addPdfImage(doc, signature, sigBoxX + (sigBoxW - sigW) / 2, sigBoxY + (sigBoxH - sigH) / 2, sigW, sigH);
+  } else {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(5.8);
+    doc.setTextColor(150, 150, 150);
+    doc.text('Firma no disponible', sigBoxX + sigBoxW / 2, sigBoxY + 9.5, { align: 'center' });
+  }
+
+  doc.setDrawColor(120, 135, 165);
+  doc.line(blockX + 80, blockY + 23, blockX + blockW - 8, blockY + 23);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7);
+  doc.setTextColor(25, 35, 65);
+  doc.text(emptyValue(log.capataz_name), blockX + 80, blockY + 18);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.8);
+  doc.setTextColor(95, 105, 125);
+  doc.text('Nombre y firma responsable de cuadrilla', blockX + 80, blockY + 28);
+
+  return PAGE_H - 10;
 }
 
 const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/630dfa8aa_logoclientes-8.png';
@@ -357,6 +449,9 @@ export async function exportReportPDF(
   const projects = Array.isArray(projectsOrUserName) ? projectsOrUserName : [];
   const userName = Array.isArray(projectsOrUserName) ? userNameArg : projectsOrUserName;
   const showIncludedProjects = options.showIncludedProjects !== false;
+  const includeDailyReports = options.includeDailyReports !== false;
+  const includePhotos = options.includePhotos !== false;
+  const reportLogs = includeDailyReports ? dailyLogs : [];
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
@@ -370,7 +465,7 @@ export async function exportReportPDF(
   const completados = masterItems.filter(i => i.status === 'completado').length;
   const bloqueados = masterItems.filter(i => i.status === 'bloqueado').length;
   const enEjecucion = masterItems.filter(i => i.status === 'en_ejecucion').length;
-  const sortedAllLogs = [...dailyLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sortedAllLogs = [...reportLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const lastLogDate = sortedAllLogs[0]?.date || '—';
 
   // Agrupar por proyecto
@@ -389,7 +484,7 @@ export async function exportReportPDF(
     todayShort,
     logoData,
     masterItems,
-    dailyLogs,
+    dailyLogs: reportLogs,
     byProject,
     globalPct,
     lastLogDate,
@@ -411,7 +506,7 @@ export async function exportReportPDF(
     { label: 'En Ejecución', value: enEjecucion, color: [30, 100, 200] },
     { label: 'Completados', value: completados, color: [34, 150, 60] },
     { label: 'Bloqueados', value: bloqueados, color: [200, 50, 50] },
-    { label: 'Reportes Diarios', value: dailyLogs.length, color: [80, 80, 80] },
+    { label: 'Reportes Diarios', value: reportLogs.length, color: [80, 80, 80] },
   ];
   const kpiW = CW / 3 - 2;
   const kpiH = 16;
@@ -447,7 +542,7 @@ export async function exportReportPDF(
     const projPlanned = items.reduce((s, i) => s + (i.planned_qty || 0), 0);
     const projExecuted = items.reduce((s, i) => s + (i.executed_qty || 0), 0);
     const projPct = projPlanned > 0 ? (projExecuted / projPlanned * 100) : 0;
-    const projLogs = dailyLogs.filter(l => l.project === projectName).length;
+    const projLogs = reportLogs.filter(l => l.project === projectName).length;
 
     if (y + 8 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
 
@@ -568,7 +663,7 @@ export async function exportReportPDF(
       const mi = masterItems.find(i => i.id === p.master_item_id);
       return mi?.project === projectName;
     });
-    if (projPhotos.length > 0) {
+    if (includePhotos && projPhotos.length > 0) {
       if (y + 10 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
       y = addSectionTitle(doc, `FOTOS DE OBRA`, y);
       y = await renderPhotos(doc, projPhotos, y, today, logoData);
@@ -578,38 +673,23 @@ export async function exportReportPDF(
   // ══════════════════════════════════════════════════════════════
   // SECCIÓN 3: REPORTES DIARIOS (todos, ordenados por fecha desc)
   // ══════════════════════════════════════════════════════════════
-  if (sortedAllLogs.length > 0) {
-    doc.addPage();
-    y = addPageHeader(doc, today, logoData);
+  if (includeDailyReports && sortedAllLogs.length > 0) {
+    // Cada reporte diario comienza en su propia hoja.
+    for (const [logIndex, log] of sortedAllLogs.entries()) {
+      doc.addPage();
+      y = addPageHeader(doc, today, logoData);
 
-    // Encabezado de sección
-    doc.setFillColor(13, 27, 64);
-    doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
-    doc.setFillColor(234, 179, 8);
-    doc.roundedRect(M, y + 12, CW, 2, 0, 0, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.text('REPORTES DIARIOS', M + 4, y + 9);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    doc.setTextColor(180, 200, 230);
-    doc.text(`${sortedAllLogs.length} registros  ·  Último: ${lastLogDate}`, M + CW - 3, y + 9, { align: 'right' });
-    y += 20;
-
-    for (const log of sortedAllLogs) {
       const logItem = masterItems.find(i => i.id === log.master_item_id);
       const logPhotos = sitePhotos.filter(p =>
         p.daily_log_id === log.id ||
         (p.master_item_id === log.master_item_id && p.date === log.date)
       );
 
-      if (y + 28 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-
-      // Encabezado del log
       doc.setFillColor(45, 70, 140);
       doc.roundedRect(M, y, CW, 8, 1, 1, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
       doc.setTextColor(255, 255, 255);
-      const logTitle = [log.date, log.project, log.tower, log.floor, log.activity].filter(Boolean).join('  ·  ');
+      const logTitle = [`Reporte ${logIndex + 1}`, log.date, log.project, log.tower, log.floor, log.activity].filter(Boolean).join('  -  ');
       doc.text(logTitle, M + 3, y + 5.5);
       if (log.supervisor) {
         doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
@@ -618,7 +698,6 @@ export async function exportReportPDF(
       }
       y += 10;
 
-      // Métricas
       doc.setFillColor(245, 248, 255);
       doc.roundedRect(M, y, CW, 10, 1, 1, 'F');
       doc.setDrawColor(210, 220, 240); doc.setLineWidth(0.15);
@@ -628,34 +707,32 @@ export async function exportReportPDF(
         ['Ejecutado hoy', `${log.executed_today ?? 0} ${logItem?.unit || 'und'}`],
         ['Horas trabajadas', `${log.hours_worked || 0}h`],
         ['Personal', `${log.crew_workers?.length || 0} pers.`],
-        ['Restricción', log.has_restriction ? '⚠ Sí' : 'No'],
+        ['Restriccion', log.has_restriction ? 'Si' : 'No'],
       ];
       metrics.forEach(([label, val], i) => {
         const mx = M + i * mW + 3;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(100, 110, 130);
         doc.text(label, mx, y + 4);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-        if (label === 'Restricción' && log.has_restriction) doc.setTextColor(200, 50, 50);
+        if (label === 'Restriccion' && log.has_restriction) doc.setTextColor(200, 50, 50);
         else doc.setTextColor(20, 40, 90);
         doc.text(val, mx, y + 9);
       });
       y += 12;
 
-      // Personal del día
       if (log.crew_workers?.length > 0) {
-        if (y + 5 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
+        y = ensureSpace(doc, y, 5, today, logoData, REPORT_SIGNATURE_TOP);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(60, 80, 120);
         doc.text('Personal presente:', M + 4, y + 3);
         y += 6;
-        // Tabla compacta de personal
         log.crew_workers.forEach((w, wi) => {
-          if (y + 4.5 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
+          y = ensureSpace(doc, y, 4.5, today, logoData, REPORT_SIGNATURE_TOP);
           if (wi % 2 === 0) { doc.setFillColor(248, 250, 254); } else { doc.setFillColor(255, 255, 255); }
           doc.rect(M + 4, y - 1, CW - 4, 4.5, 'F');
           doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(40, 40, 40);
-          doc.text(`${w.name || '—'}`, M + 7, y + 2.5);
+          doc.text(`${w.name || '---'}`, M + 7, y + 2.5);
           doc.setTextColor(80, 90, 120);
-          doc.text(w.role || '—', M + 65, y + 2.5);
+          doc.text(w.role || '---', M + 65, y + 2.5);
           if (w.hours) doc.text(`${w.hours}h`, M + 110, y + 2.5);
           if (w.executed) doc.text(`${w.executed} und`, M + 130, y + 2.5);
           y += 4.5;
@@ -663,12 +740,11 @@ export async function exportReportPDF(
         y += 2;
       }
 
-      // Restricción detalle
       if (log.has_restriction && log.restriction_detail) {
-        if (y + 10 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-        doc.setFillColor(255, 243, 240);
-        const rLines = doc.splitTextToSize(`⚠ ${log.restriction_detail}`, CW - 10);
+        const rLines = doc.splitTextToSize(`Restriccion: ${log.restriction_detail}`, CW - 10);
         const rH = rLines.length * 4 + 5;
+        y = ensureSpace(doc, y, rH + 3, today, logoData, REPORT_SIGNATURE_TOP);
+        doc.setFillColor(255, 243, 240);
         doc.roundedRect(M, y, CW, rH, 1, 1, 'F');
         doc.setDrawColor(220, 60, 60); doc.setLineWidth(0.2);
         doc.roundedRect(M, y, CW, rH, 1, 1, 'S');
@@ -677,12 +753,11 @@ export async function exportReportPDF(
         y += rH + 3;
       }
 
-      // Observaciones
       if (log.observations) {
-        if (y + 8 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-        doc.setFillColor(245, 248, 255);
         const oLines = doc.splitTextToSize(log.observations, CW - 10);
         const oH = oLines.length * 4 + 5;
+        y = ensureSpace(doc, y, oH + 3, today, logoData, REPORT_SIGNATURE_TOP);
+        doc.setFillColor(245, 248, 255);
         doc.roundedRect(M, y, CW, oH, 1, 1, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(40, 60, 110);
         doc.text('Obs:', M + 4, y + 4.5);
@@ -691,16 +766,12 @@ export async function exportReportPDF(
         y += oH + 3;
       }
 
-      // Fotos del reporte
-      if (logPhotos.length > 0) {
-        y = await renderPhotos(doc, logPhotos, y, today, logoData);
+      if (includePhotos && logPhotos.length > 0) {
+        y = await renderPhotos(doc, logPhotos, y, today, logoData, { bottomLimit: REPORT_SIGNATURE_TOP });
       }
 
-      // Separador
-      y += 2;
-      doc.setDrawColor(200, 210, 235); doc.setLineWidth(0.15);
-      doc.line(M, y, M + CW, y);
-      y += 5;
+      y = ensureSpace(doc, y, 38, today, logoData, REPORT_SIGNATURE_TOP);
+      y = await drawCapatazSignature(doc, log);
     }
   }
 

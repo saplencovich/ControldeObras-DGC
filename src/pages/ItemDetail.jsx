@@ -268,6 +268,7 @@ export default function ItemDetail() {
           <ItemScopeSummary item={item} />
         </div>
 
+
         <Button
           variant="outline"
           onClick={() =>
