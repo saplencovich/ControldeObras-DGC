@@ -363,26 +363,26 @@ export default function MasterPlanTable({
               <TableRow className="bg-muted/50">
                 <TableHead className="w-8 text-xs" />
                 <TableHead className="text-xs">Proyecto</TableHead>
-                <TableHead className="text-xs">Supervisor</TableHead>
-                <TableHead className="text-xs">Torre</TableHead>
+                <TableHead className="text-xs hidden xl:table-cell">Supervisor</TableHead>
+                <TableHead className="text-xs hidden lg:table-cell">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
-                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs hidden lg:table-cell">
                   F. Inicio
                 </TableHead>
-                <TableHead className="min-w-[92px] whitespace-nowrap text-xs">
+                <TableHead className="min-w-[92px] whitespace-nowrap text-xs hidden lg:table-cell">
                   F. Término
                 </TableHead>
                 <TableHead className="text-right text-xs">Plan</TableHead>
                 <TableHead className="text-right text-xs">Ejecutado</TableHead>
-                <TableHead className="text-xs">Und</TableHead>
-                <TableHead className="text-xs">Cuadrilla</TableHead>
+                <TableHead className="text-xs hidden lg:table-cell">Und</TableHead>
+                <TableHead className="text-xs hidden lg:table-cell">Cuadrilla</TableHead>
                 <TableHead className="min-w-[100px] text-xs">
                   % Avance
                 </TableHead>
                 <TableHead className="text-xs">Estado</TableHead>
-                <TableHead className="text-center text-xs">Prod.</TableHead>
-                <TableHead className="text-xs">Restricciones</TableHead>
+                <TableHead className="text-center text-xs hidden lg:table-cell">Prod.</TableHead>
+                <TableHead className="text-xs hidden xl:table-cell">Restricciones</TableHead>
                 <TableHead className="text-center text-xs">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -439,11 +439,11 @@ export default function MasterPlanTable({
                         {row.project || "—"}
                       </TableCell>
 
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground hidden xl:table-cell">
                         {projectSupervisorByName[row.project] || "—"}
                       </TableCell>
 
-                      <TableCell>{row.tower || "—"}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{row.tower || "—"}</TableCell>
                       <TableCell className="min-w-[160px] max-w-[240px]">
                         <FloorsDisplay floor={row.displayFloor} />
                       </TableCell>
@@ -452,11 +452,11 @@ export default function MasterPlanTable({
                         {row.activity || "—"}
                       </TableCell>
 
-                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground">
+                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground hidden lg:table-cell">
                         {row.start_date || "—"}
                       </TableCell>
 
-                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground">
+                      <TableCell className="min-w-[92px] whitespace-nowrap font-mono text-muted-foreground hidden lg:table-cell">
                         {row.end_date || "—"}
                       </TableCell>
 
@@ -468,11 +468,11 @@ export default function MasterPlanTable({
                         {formatNumber(row.executed_qty)}
                       </TableCell>
 
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground hidden lg:table-cell">
                         {row.unit || "—"}
                       </TableCell>
 
-                      <TableCell>{row.crew_name || "—"}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{row.crew_name || "—"}</TableCell>
 
                       <TableCell>
                         <div className="space-y-1">
@@ -491,7 +491,7 @@ export default function MasterPlanTable({
                         </Badge>
                       </TableCell>
 
-                      <TableCell className="text-center">
+                      <TableCell className="text-center hidden lg:table-cell">
                         <div
                           className={`mx-auto h-3 w-3 rounded-full ${prodColor}`}
                           title={`Productividad ${pct}%`}
@@ -499,7 +499,7 @@ export default function MasterPlanTable({
                       </TableCell>
 
                       <TableCell
-                        className="max-w-[120px] truncate text-muted-foreground"
+                        className="max-w-[120px] truncate text-muted-foreground hidden xl:table-cell"
                         title={row.restrictions || ""}
                       >
                         {row.restrictions || "—"}
@@ -558,76 +558,97 @@ export default function MasterPlanTable({
                       </TableCell>
                     </TableRow>
 
-                    {isExpanded &&
-                      itemLogs.map((log) => (
-                        <TableRow
-                          key={`${row.displayRowId}-${log.id}`}
-                          className="border-l-2 border-l-accent/30 bg-muted/20 text-xs"
-                        >
-                          <TableCell className="p-1" />
+                    {isExpanded && (
+                      <TableRow className="border-l-2 border-l-accent/30 bg-muted/10 text-xs">
+                        <TableCell className="p-0" />
+                        <TableCell colSpan={100} className="p-0">
+                          <div className="divide-y divide-border/40">
+                            {itemLogs.map((log) => (
+                              <div
+                                key={`${row.displayRowId}-${log.id}`}
+                                className="flex flex-wrap items-center justify-between gap-4 p-3 pl-6 pr-4 hover:bg-muted/20"
+                              >
+                                <div className="flex items-center gap-2 min-w-[200px]">
+                                  <FileText className="h-3.5 w-3.5 text-accent" />
+                                  <span className="font-semibold text-foreground">
+                                    {log.date || "Sin fecha"}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    — {log.supervisor || "Sin supervisor"}
+                                  </span>
+                                </div>
 
-                          <TableCell
-                            colSpan={5}
-                            className="pl-6 text-muted-foreground"
-                          >
-                            <span className="inline-flex items-center gap-1.5">
-                              <FileText className="h-3 w-3 text-accent" />
-                              <span className="font-medium text-foreground">
-                                {log.date || "Sin fecha"}
-                              </span>
-                              <span>
-                                — {log.supervisor || "Sin supervisor"}
-                              </span>
-                            </span>
-                          </TableCell>
+                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground">
+                                  <div>
+                                    Ejecutado:{" "}
+                                    <span className="font-mono font-bold text-emerald-700 text-xs">
+                                      +{formatNumber(log.executed_today)}
+                                    </span>{" "}
+                                    {row.unit}
+                                  </div>
 
-                          <TableCell />
-                          <TableCell />
+                                  {log.hours_worked && (
+                                    <div>
+                                      Horas:{" "}
+                                      <span className="font-medium text-foreground">
+                                        {formatNumber(log.hours_worked)}h
+                                      </span>
+                                    </div>
+                                  )}
 
-                          <TableCell className="text-right font-mono text-muted-foreground">
-                            —
-                          </TableCell>
+                                  {Array.isArray(log.crew_workers) &&
+                                    log.crew_workers.length > 0 && (
+                                      <div>
+                                        Personal:{" "}
+                                        <span className="font-medium text-foreground">
+                                          {log.crew_workers.length} pers.
+                                        </span>
+                                      </div>
+                                    )}
 
-                          <TableCell className="text-right font-mono font-medium text-emerald-700">
-                            +{formatNumber(log.executed_today)}
-                          </TableCell>
+                                  {log.has_restriction && (
+                                    <Badge className="gap-1 bg-red-50 text-[10px] text-red-700 hover:bg-red-100 border border-red-200">
+                                      <AlertTriangle className="h-2.5 w-2.5" />
+                                      Restricción
+                                    </Badge>
+                                  )}
 
-                          <TableCell />
+                                  {log.observations && (
+                                    <div
+                                      className="max-w-[200px] truncate text-[11px]"
+                                      title={log.observations}
+                                    >
+                                      Obs: {log.observations}
+                                    </div>
+                                  )}
+                                </div>
 
-                          <TableCell className="text-[10px] text-muted-foreground">
-                            {Array.isArray(log.crew_workers) &&
-                            log.crew_workers.length
-                              ? `${log.crew_workers.length} pers.`
-                              : "—"}
-                          </TableCell>
-
-                          <TableCell className="text-[10px] text-muted-foreground">
-                            {log.hours_worked
-                              ? `${formatNumber(log.hours_worked)}h`
-                              : "—"}
-                          </TableCell>
-
-                          <TableCell>
-                            {log.has_restriction && (
-                              <Badge className="gap-1 bg-red-50 text-[10px] text-red-700">
-                                <AlertTriangle className="h-2.5 w-2.5" />
-                                Restricción
-                              </Badge>
-                            )}
-                          </TableCell>
-
-                          <TableCell />
-
-                          <TableCell
-                            className="max-w-[120px] truncate text-[10px] text-muted-foreground"
-                            title={log.observations || ""}
-                          >
-                            {log.observations || "—"}
-                          </TableCell>
-
-                          <TableCell />
-                        </TableRow>
-                      ))}
+                                <div className="flex items-center justify-end">
+                                  {canDelete && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                      onClick={() => {
+                                        const confirmed = window.confirm(
+                                          `¿Eliminar el reporte del ${log.date}?`
+                                        );
+                                        if (confirmed) {
+                                          safeOnDeleteLog(log, row);
+                                        }
+                                      }}
+                                      title="Eliminar reporte diario"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </React.Fragment>
                 );
               })}

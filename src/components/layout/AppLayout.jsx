@@ -112,38 +112,48 @@ export default function AppLayout() {
       </header>
 
       {/* Mobile Nav */}
-      {mobileOpen && (
+      <div
+        className={`fixed inset-0 z-40 md:hidden transition-all duration-300 ${
+          mobileOpen ? "visible pointer-events-auto" : "invisible pointer-events-none"
+        }`}
+      >
+        {/* Backdrop */}
         <div
-          className="fixed inset-0 z-40 md:hidden"
+          className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
+            mobileOpen ? "opacity-100" : "opacity-0"
+          }`}
           onClick={() => setMobileOpen(false)}
+        />
+        {/* Sidebar */}
+        <nav
+          className={`absolute left-0 top-14 bottom-0 w-64 bg-card shadow-xl p-4 space-y-1 transition-transform duration-300 ease-in-out ${
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="absolute inset-0 bg-black/50" />
-          <nav
-            className="absolute left-0 top-14 w-64 bg-card shadow-xl p-4 space-y-1"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {navItems.map((item) => {
-              const active = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                  {active && <ChevronRight className="w-4 h-4 ml-auto" />}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      )}
+          {navItems.map((item) => {
+            const active =
+              location.pathname === item.path ||
+              (item.path !== "/" && location.pathname.startsWith(item.path));
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : "text-foreground hover:bg-muted"
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+                {active && <ChevronRight className="w-4 h-4 ml-auto" />}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
 
       {/* Content */}
       <main className="p-4 md:p-6 max-w-screen-2xl mx-auto">

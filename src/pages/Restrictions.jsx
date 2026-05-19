@@ -138,7 +138,7 @@ export default function Restrictions() {
         </h1>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -182,9 +182,9 @@ export default function Restrictions() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Select value={selectedProject} onValueChange={setSelectedProject}>
-          <SelectTrigger className="h-8 w-48 text-xs">
+          <SelectTrigger className="h-8 w-full sm:w-48 text-xs">
             <SelectValue placeholder="Filtrar por obra" />
           </SelectTrigger>
           <SelectContent>
@@ -198,7 +198,7 @@ export default function Restrictions() {
         </Select>
 
         <Select value={selectedActivity} onValueChange={setSelectedActivity}>
-          <SelectTrigger className="h-8 w-48 text-xs">
+          <SelectTrigger className="h-8 w-full sm:w-48 text-xs">
             <SelectValue placeholder="Filtrar por actividad" />
           </SelectTrigger>
           <SelectContent>
@@ -237,14 +237,14 @@ export default function Restrictions() {
                     restriction.severity
                   )}`}
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="flex items-start gap-3 flex-1">
                       <div className="mt-0.5 text-red-500">
                         {getSeverityIcon(restriction.severity)}
                       </div>
 
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <p className="font-semibold text-sm">
                             {restriction.activity}
                           </p>
@@ -280,7 +280,7 @@ export default function Restrictions() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs gap-1.5 shrink-0"
+                      className="h-8 text-xs gap-1.5 shrink-0 w-full sm:w-auto"
                       onClick={() => navigate(`/item/${restriction.relatedId}`)}
                     >
                       <Link2 className="w-3 h-3" />
