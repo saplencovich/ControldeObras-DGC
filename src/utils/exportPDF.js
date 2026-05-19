@@ -51,6 +51,54 @@ function addSectionTitle(doc, text, y) {
   return y + 12;
 }
 
+function emptyValue(value) {
+  return String(value || '').trim() || '—';
+}
+
+function projectByName(projects, projectName) {
+  return (projects || []).find((project) => project?.name === projectName) || null;
+}
+
+function drawProjectInfoCard(doc, project, x, y, w) {
+  const rows = [
+    ['Ubicacion', emptyValue(project?.address || project?.location)],
+    ['Cliente', emptyValue(project?.client)],
+    ['Capataz', emptyValue(project?.capataz)],
+    ['Fecha Inicio', emptyValue(project?.start_date)],
+    ['Fecha Termino', emptyValue(project?.end_date)],
+    ['Descripcion', emptyValue(project?.description)],
+  ];
+  const valueX = x + 34;
+  const maxValueW = w - 39;
+  const rowLineGroups = rows.map(([label, value]) => [
+    label,
+    doc.splitTextToSize(String(value), maxValueW),
+  ]);
+  const rowHeights = rowLineGroups.map(([, lines]) => Math.max(6, lines.length * 3.6 + 2));
+  const cardH = rowHeights.reduce((sum, height) => sum + height, 0) + 6;
+
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(x, y, w, cardH, 1.5, 1.5, 'F');
+  doc.setDrawColor(210, 220, 240);
+  doc.setLineWidth(0.15);
+  doc.roundedRect(x, y, w, cardH, 1.5, 1.5, 'S');
+
+  let rowY = y + 5;
+  rowLineGroups.forEach(([label, lines], index) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.2);
+    doc.setTextColor(85, 96, 125);
+    doc.text(label, x + 3, rowY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.6);
+    doc.setTextColor(25, 35, 65);
+    doc.text(lines, valueX, rowY);
+    rowY += rowHeights[index];
+  });
+
+  return cardH;
+}
+
 async function renderPhotos(doc, photos, y, today, logoData) {
   if (photos.length === 0) return y;
 
@@ -142,6 +190,7 @@ function drawCoverPage(doc, {
   byProject,
   globalPct,
   lastLogDate,
+  supervisor = '',
   userName = '',
 }) {
   const projectNames = Object.keys(byProject);
@@ -250,18 +299,20 @@ function drawCoverPage(doc, {
     const suffix = projectNames.length > 5 ? `  (+${projectNames.length - 5} más)` : '';
     lines = doc.splitTextToSize(preview + suffix, cardW - 16);
     doc.text(lines, cardX + 8, cy + 7);
+    cy += lines.length * 4 + 9;
   }
   
-  if (userName) {
-    cy += lines ? lines.length * 4 + 4 : 8;
+  const issuedBy = supervisor || userName;
+  if (issuedBy) {
+    if (projectNames.length === 0) cy += 4;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(13, 27, 64);
-    doc.text('Emitido por:', cardX + 8, cy + 2);
+    doc.text('Emitido por:', cardX + 8, cy);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(25, 35, 65);
-    doc.text(userName, cardX + 52, cy);
+    doc.text(issuedBy, cardX + 52, cy);
   }
 
   const barY = PAGE_H - 52;
@@ -294,7 +345,16 @@ function drawCoverPage(doc, {
   );
 }
 
-export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], checklistEntries = [], userName = '') {
+export async function exportReportPDF(
+  masterItems,
+  dailyLogs,
+  sitePhotos = [],
+  checklistEntries = [],
+  projectsOrUserName = '',
+  userNameArg = ''
+) {
+  const projects = Array.isArray(projectsOrUserName) ? projectsOrUserName : [];
+  const userName = Array.isArray(projectsOrUserName) ? userNameArg : projectsOrUserName;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
@@ -319,6 +379,24 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
     byProject[p].push(item);
   });
 
+  // Determinar supervisor(es) para la portada: preferir supervisores desde la tabla `projects` si viene,
+  // y usar los de `dailyLogs` sólo como fallback.
+  const supervisorSet = new Set();
+  if (Array.isArray(projects) && projects.length > 0) {
+    projects.forEach((p) => {
+      const s = String(p?.supervisor || '').trim();
+      if (s) supervisorSet.add(s);
+    });
+  }
+  // Si no encontramos supervisores en la tabla de projects, usar los de los reportes diarios
+  if (supervisorSet.size === 0) {
+    sortedAllLogs.forEach((l) => {
+      const s = String(l.supervisor || '').trim();
+      if (s) supervisorSet.add(s);
+    });
+  }
+  const supervisorStr = Array.from(supervisorSet).join(', ');
+
   // ══════════════════════════════════════════════════════════════
   // PÁGINA 1: PORTADA PROFESIONAL (solo portada)
   // ══════════════════════════════════════════════════════════════
@@ -331,6 +409,7 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
     byProject,
     globalPct,
     lastLogDate,
+    supervisor: supervisorStr,
     userName,
   });
 
@@ -409,6 +488,11 @@ export async function exportReportPDF(masterItems, dailyLogs, sitePhotos = [], c
     doc.text(`${projPct.toFixed(1)}%`, M + CW - 3, y + 5.5, { align: 'right' });
 
     y += 10;
+    if (y + 46 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
+
+    const project = projectByName(projects, projectName);
+    const infoCardH = drawProjectInfoCard(doc, project, M + 3, y, CW - 6);
+    y += infoCardH + 5;
   }
 
   // ══════════════════════════════════════════════════════════════

@@ -238,7 +238,16 @@ export default function ItemDetail() {
           </div>
           <Button 
             variant="outline" 
-            onClick={() => exportReportPDF([item], scopedLogs, scopedPhotos, [], projectSupervisor)}
+            onClick={() =>
+              exportReportPDF(
+                [item],
+                scopedLogs,
+                scopedPhotos,
+                [],
+                projectForItem ? [projectForItem] : [],
+                user?.full_name || projectSupervisor
+              )
+            }
           >
             Exportar PDF
           </Button>

@@ -11,7 +11,6 @@ import {
   Search,
   Plus,
   Download,
-  RefreshCw,
   FileSpreadsheet,
   Pencil,
   Check,
@@ -129,6 +128,7 @@ export default function FilterBar({
   onEditProject,
   onNewItem,
   onRefresh,
+  userName = '',
 }) {
   const { canCreateProjects, isAdmin } = usePermissions();
 
@@ -296,7 +296,7 @@ export default function FilterBar({
             variant="outline"
             size="sm"
             className="h-8 gap-1.5 text-xs"
-            onClick={() => exportReportPDF(masterItems, dailyLogs, sitePhotos, [])}
+            onClick={() => exportReportPDF(masterItems, dailyLogs, sitePhotos, [], projects, userName)}
           >
             <Download className="h-3 w-3" />
             Exportar PDF

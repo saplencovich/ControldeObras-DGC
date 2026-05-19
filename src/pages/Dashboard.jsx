@@ -475,6 +475,7 @@ export default function Dashboard() {
         filterOptionItems={masterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
+        userName={user?.full_name || ''}
         onNewProject={handleOpenNewProject}
         onEditProject={handleOpenEditProject}
         onNewItem={() => {
