@@ -227,6 +227,7 @@ export default function MasterPlan() {
         masterItems={filteredItems}
         filterOptionItems={filteredMasterItems}
         dailyLogs={filteredLogs}
+        userName={user?.full_name || ''}
         onNewProject={handleOpenNewProject}
         onEditProject={handleOpenEditProject}
         onNewItem={() => {

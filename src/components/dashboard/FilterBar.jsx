@@ -296,7 +296,11 @@ export default function FilterBar({
             variant="outline"
             size="sm"
             className="h-8 gap-1.5 text-xs"
-            onClick={() => exportReportPDF(masterItems, dailyLogs, sitePhotos, [], projects, userName)}
+            onClick={() =>
+              exportReportPDF(masterItems, dailyLogs, sitePhotos, [], projects, userName, {
+                showIncludedProjects: false,
+              })
+            }
           >
             <Download className="h-3 w-3" />
             Exportar PDF

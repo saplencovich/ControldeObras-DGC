@@ -245,7 +245,7 @@ export default function ItemDetail() {
                 scopedPhotos,
                 [],
                 projectForItem ? [projectForItem] : [],
-                user?.full_name || projectSupervisor
+                projectSupervisor
               )
             }
           >

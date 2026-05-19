@@ -61,12 +61,12 @@ function projectByName(projects, projectName) {
 
 function drawProjectInfoCard(doc, project, x, y, w) {
   const rows = [
-    ['Ubicacion', emptyValue(project?.address || project?.location)],
+    ['Ubicación', emptyValue(project?.address || project?.location)],
     ['Cliente', emptyValue(project?.client)],
     ['Capataz', emptyValue(project?.capataz)],
     ['Fecha Inicio', emptyValue(project?.start_date)],
-    ['Fecha Termino', emptyValue(project?.end_date)],
-    ['Descripcion', emptyValue(project?.description)],
+    ['Fecha Término', emptyValue(project?.end_date)],
+    ['Descripción', emptyValue(project?.description)],
   ];
   const valueX = x + 34;
   const maxValueW = w - 39;
@@ -190,8 +190,8 @@ function drawCoverPage(doc, {
   byProject,
   globalPct,
   lastLogDate,
-  supervisor = '',
   userName = '',
+  showIncludedProjects = true,
 }) {
   const projectNames = Object.keys(byProject);
   const docCode = `DGC-INF-${todayShort.replace(/-/g, '')}`;
@@ -287,7 +287,7 @@ function drawCoverPage(doc, {
   });
 
   let lines = [];
-  if (projectNames.length > 0) {
+  if (showIncludedProjects && projectNames.length > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(13, 27, 64);
@@ -302,9 +302,9 @@ function drawCoverPage(doc, {
     cy += lines.length * 4 + 9;
   }
   
-  const issuedBy = supervisor || userName;
+  const issuedBy = userName;
   if (issuedBy) {
-    if (projectNames.length === 0) cy += 4;
+    if (!showIncludedProjects || projectNames.length === 0) cy += 4;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(13, 27, 64);
@@ -351,10 +351,12 @@ export async function exportReportPDF(
   sitePhotos = [],
   checklistEntries = [],
   projectsOrUserName = '',
-  userNameArg = ''
+  userNameArg = '',
+  options = {}
 ) {
   const projects = Array.isArray(projectsOrUserName) ? projectsOrUserName : [];
   const userName = Array.isArray(projectsOrUserName) ? userNameArg : projectsOrUserName;
+  const showIncludedProjects = options.showIncludedProjects !== false;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
@@ -379,24 +381,6 @@ export async function exportReportPDF(
     byProject[p].push(item);
   });
 
-  // Determinar supervisor(es) para la portada: preferir supervisores desde la tabla `projects` si viene,
-  // y usar los de `dailyLogs` sólo como fallback.
-  const supervisorSet = new Set();
-  if (Array.isArray(projects) && projects.length > 0) {
-    projects.forEach((p) => {
-      const s = String(p?.supervisor || '').trim();
-      if (s) supervisorSet.add(s);
-    });
-  }
-  // Si no encontramos supervisores en la tabla de projects, usar los de los reportes diarios
-  if (supervisorSet.size === 0) {
-    sortedAllLogs.forEach((l) => {
-      const s = String(l.supervisor || '').trim();
-      if (s) supervisorSet.add(s);
-    });
-  }
-  const supervisorStr = Array.from(supervisorSet).join(', ');
-
   // ══════════════════════════════════════════════════════════════
   // PÁGINA 1: PORTADA PROFESIONAL (solo portada)
   // ══════════════════════════════════════════════════════════════
@@ -409,8 +393,8 @@ export async function exportReportPDF(
     byProject,
     globalPct,
     lastLogDate,
-    supervisor: supervisorStr,
     userName,
+    showIncludedProjects,
   });
 
   // ══════════════════════════════════════════════════════════════
