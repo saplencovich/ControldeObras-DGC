@@ -6,12 +6,14 @@ const PAGE_W = 210;
 const PAGE_H = 297;
 const M = 12;
 const CW = PAGE_W - M * 2;
+const SERVER_URL = (
+  import.meta.env?.VITE_API_URL || 'http://localhost:3001/api'
+).replace(/\/api\/?$/, '');
+const PAGE_BOTTOM = PAGE_H - 14;
+const REPORT_SIGNATURE_TOP = PAGE_H - 54;
 
 function statusLabel(s) {
   return { pendiente: 'Pendiente', en_ejecucion: 'En ejecución', completado: 'Completado', bloqueado: 'Bloqueado' }[s] || s || '—';
-}
-function releaseLabel(s) {
-  return { liberado: 'Liberado', no_liberado: 'No liberado', parcial: 'Parcial' }[s] || '—';
 }
 
 function drawProgressBar(doc, x, y, w, h, pct) {
@@ -55,6 +57,39 @@ function emptyValue(value) {
   return String(value || '').trim() || '—';
 }
 
+function resolveImageSrc(value) {
+  if (!value || typeof value !== 'string') return '';
+  if (value.startsWith('data:image/')) return value;
+  if (value.startsWith('http')) return value;
+  if (value.startsWith('/uploads')) return `${SERVER_URL}${value}`;
+  return value;
+}
+
+async function loadImageForPdf(src) {
+  const resolvedSrc = resolveImageSrc(src);
+  if (!resolvedSrc) return null;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), aspect: canvas.width / canvas.height });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = resolvedSrc;
+  });
+}
+
+function addPdfImage(doc, imageData, x, y, w, h) {
+  doc.addImage(imageData.dataUrl, 'PNG', x, y, w, h);
+}
+
 function projectByName(projects, projectName) {
   return (projects || []).find((project) => project?.name === projectName) || null;
 }
@@ -70,10 +105,7 @@ function drawProjectInfoCard(doc, project, x, y, w) {
   ];
   const valueX = x + 34;
   const maxValueW = w - 39;
-  const rowLineGroups = rows.map(([label, value]) => [
-    label,
-    doc.splitTextToSize(String(value), maxValueW),
-  ]);
+  const rowLineGroups = rows.map(([label, value]) => [label, doc.splitTextToSize(String(value), maxValueW)]);
   const rowHeights = rowLineGroups.map(([, lines]) => Math.max(6, lines.length * 3.6 + 2));
   const cardH = rowHeights.reduce((sum, height) => sum + height, 0) + 6;
 
@@ -85,13 +117,9 @@ function drawProjectInfoCard(doc, project, x, y, w) {
 
   let rowY = y + 5;
   rowLineGroups.forEach(([label, lines], index) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.2);
-    doc.setTextColor(85, 96, 125);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.2); doc.setTextColor(85, 96, 125);
     doc.text(label, x + 3, rowY);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6.6);
-    doc.setTextColor(25, 35, 65);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.6); doc.setTextColor(25, 35, 65);
     doc.text(lines, valueX, rowY);
     rowY += rowHeights[index];
   });
@@ -99,14 +127,16 @@ function drawProjectInfoCard(doc, project, x, y, w) {
   return cardH;
 }
 
-async function renderPhotos(doc, photos, y, today, logoData) {
+async function renderPhotos(doc, photos, y, today, logoData, options = {}) {
   if (photos.length === 0) return y;
+  const bottomLimit = options.bottomLimit || PAGE_BOTTOM;
+  const showCount = options.showCount !== false;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6.5);
-  doc.setTextColor(40, 60, 110);
-  doc.text(`Fotos (${photos.length}):`, M + 4, y);
-  y += 4;
+  if (showCount) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(40, 60, 110);
+    doc.text(`Fotos (${photos.length}):`, M + 4, y);
+    y += 4;
+  }
 
   const photoW = (CW - 10) / 3;
   const photoH = 36;
@@ -114,52 +144,76 @@ async function renderPhotos(doc, photos, y, today, logoData) {
   let rowStartY = y;
 
   for (const photo of photos) {
-    if (!photo.file_url) continue;
+    if (!photo.file_url && !photo.url) continue;
     if (photoCol === 0) {
-      if (y + photoH + 10 > PAGE_H - 14) {
-        doc.addPage();
-        y = addPageHeader(doc, today, logoData);
-      }
+      if (y + photoH + 10 > bottomLimit) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
       rowStartY = y;
     }
     const px = M + 4 + photoCol * (photoW + 3);
     const py = rowStartY;
-
-    await new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        doc.setDrawColor(200, 205, 215);
-        doc.setLineWidth(0.3);
-        doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'S');
-        const aspect = img.width / img.height;
-        let iW = photoW - 2; let iH = iW / aspect;
-        if (iH > photoH - 2) { iH = photoH - 2; iW = iH * aspect; }
-        doc.addImage(img, 'JPEG', px + (photoW - iW) / 2, py + 1, iW, iH);
-        resolve();
-      };
-      img.onerror = () => {
-        doc.setFillColor(245, 245, 245);
-        doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'F');
-        doc.setFontSize(6); doc.setTextColor(150, 150, 150);
-        doc.text('[no disponible]', px + photoW / 2, py + photoH / 2, { align: 'center' });
-        resolve();
-      };
-      img.src = photo.file_url;
-    });
-
+    const imageData = await loadImageForPdf(photo.file_url || photo.url);
+    if (imageData) {
+      doc.setDrawColor(200, 205, 215); doc.setLineWidth(0.3);
+      doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'S');
+      let iW = photoW - 2; let iH = iW / imageData.aspect;
+      if (iH > photoH - 2) { iH = photoH - 2; iW = iH * imageData.aspect; }
+      addPdfImage(doc, imageData, px + (photoW - iW) / 2, py + 1, iW, iH);
+    } else {
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(px, py, photoW, photoH, 1.5, 1.5, 'F');
+      doc.setFontSize(6); doc.setTextColor(150, 150, 150);
+      doc.text('[no disponible]', px + photoW / 2, py + photoH / 2, { align: 'center' });
+    }
     if (photo.description) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5.5);
-      doc.setTextColor(120, 120, 120);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(120, 120, 120);
       doc.text(photo.description.substring(0, 30), px + photoW / 2, py + photoH + 3.5, { align: 'center' });
     }
-
     photoCol++;
     if (photoCol >= 3) { photoCol = 0; y = rowStartY + photoH + 7; }
   }
   if (photoCol > 0) y = rowStartY + photoH + 7;
   return y;
+}
+
+function ensureSpace(doc, y, needed, today, logoData, bottomLimit = PAGE_BOTTOM) {
+  if (y + needed <= bottomLimit) return y;
+  doc.addPage();
+  return addPageHeader(doc, today, logoData);
+}
+
+async function drawCapatazSignature(doc, log) {
+  const blockX = M;
+  const blockY = PAGE_H - 48;
+  const blockW = CW;
+  const blockH = 34;
+  const signature = await loadImageForPdf(log.capataz_signature);
+
+  doc.setDrawColor(210, 218, 235); doc.setLineWidth(0.25);
+  doc.roundedRect(blockX, blockY, blockW, blockH, 1.5, 1.5, 'S');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(40, 60, 110);
+  doc.text('Firma del capataz', blockX + 5, blockY + 6);
+
+  const sigBoxX = blockX + 5; const sigBoxY = blockY + 8; const sigBoxW = 64; const sigBoxH = 16;
+  doc.setFillColor(250, 251, 255);
+  doc.roundedRect(sigBoxX, sigBoxY, sigBoxW, sigBoxH, 1, 1, 'F');
+
+  if (signature) {
+    let sigW = sigBoxW - 6; let sigH = sigW / signature.aspect;
+    if (sigH > sigBoxH - 3) { sigH = sigBoxH - 3; sigW = sigH * signature.aspect; }
+    addPdfImage(doc, signature, sigBoxX + (sigBoxW - sigW) / 2, sigBoxY + (sigBoxH - sigH) / 2, sigW, sigH);
+  } else {
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(5.8); doc.setTextColor(150, 150, 150);
+    doc.text('Firma no disponible', sigBoxX + sigBoxW / 2, sigBoxY + 9.5, { align: 'center' });
+  }
+
+  doc.setDrawColor(120, 135, 165);
+  doc.line(blockX + 80, blockY + 23, blockX + blockW - 8, blockY + 23);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(25, 35, 65);
+  doc.text(emptyValue(log.capataz_name), blockX + 80, blockY + 18);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(5.8); doc.setTextColor(95, 105, 125);
+  doc.text('Nombre y firma responsable de cuadrilla', blockX + 80, blockY + 28);
+
+  return PAGE_H - 10;
 }
 
 const LOGO_URL = 'https://media.base44.com/images/public/69c135c57c9886fec79cebc5/630dfa8aa_logoclientes-8.png';
@@ -170,8 +224,7 @@ async function loadLogoDataUrl() {
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = img.width; canvas.height = img.height;
       canvas.getContext('2d').drawImage(img, 0, 0);
       resolve({ dataUrl: canvas.toDataURL('image/png'), aspect: img.width / img.height });
     };
@@ -180,88 +233,40 @@ async function loadLogoDataUrl() {
   });
 }
 
-/** Portada profesional a página completa (página 1 exclusiva). */
-function drawCoverPage(doc, {
-  today,
-  todayShort,
-  logoData,
-  masterItems,
-  dailyLogs,
-  byProject,
-  globalPct,
-  lastLogDate,
-  userName = '',
-  showIncludedProjects = true,
-}) {
+function drawCoverPage(doc, { today, todayShort, logoData, masterItems, dailyLogs, byProject, globalPct, lastLogDate, userName = '', showIncludedProjects = true }) {
   const projectNames = Object.keys(byProject);
   const docCode = `DGC-INF-${todayShort.replace(/-/g, '')}`;
   const generatedAt = format(new Date(), 'dd/MM/yyyy HH:mm');
 
-  doc.setFillColor(13, 27, 64);
-  doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
-
-  doc.setFillColor(234, 179, 8);
-  doc.rect(0, 0, PAGE_W, 5, 'F');
-
-  doc.setFillColor(20, 38, 82);
-  doc.rect(0, 5, 10, PAGE_H - 5, 'F');
-
-  doc.setFillColor(30, 55, 110);
-  doc.rect(PAGE_W - 48, 5, 48, 48, 'F');
+  doc.setFillColor(13, 27, 64); doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+  doc.setFillColor(234, 179, 8); doc.rect(0, 0, PAGE_W, 5, 'F');
+  doc.setFillColor(20, 38, 82); doc.rect(0, 5, 10, PAGE_H - 5, 'F');
+  doc.setFillColor(30, 55, 110); doc.rect(PAGE_W - 48, 5, 48, 48, 'F');
 
   let titleY = 58;
   if (logoData) {
     const logoH = 34;
     const logoW = Math.min(logoH * logoData.aspect, 78);
     const logoDrawH = logoW / logoData.aspect;
-    doc.addImage(
-      logoData.dataUrl,
-      'PNG',
-      PAGE_W / 2 - logoW / 2,
-      32,
-      logoW,
-      logoDrawH
-    );
+    doc.addImage(logoData.dataUrl, 'PNG', PAGE_W / 2 - logoW / 2, 32, logoW, logoDrawH);
     titleY = 32 + logoDrawH + 20;
   }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(30);
-  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(30); doc.setTextColor(255, 255, 255);
   doc.text('INFORME DE', PAGE_W / 2, titleY, { align: 'center' });
   doc.text('CONTROL DE OBRA', PAGE_W / 2, titleY + 13, { align: 'center' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.setTextColor(186, 200, 228);
-  doc.text(
-    'Gestión de avance · Obras eléctricas · Control de Obras DGC',
-    PAGE_W / 2,
-    titleY + 24,
-    { align: 'center' }
-  );
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(186, 200, 228);
+  doc.text('Gestión de avance · Obras eléctricas · Control de Obras DGC', PAGE_W / 2, titleY + 24, { align: 'center' });
 
   const accentY = titleY + 34;
-  doc.setFillColor(234, 179, 8);
-  doc.rect(PAGE_W / 2 - 42, accentY, 84, 1.4, 'F');
+  doc.setFillColor(234, 179, 8); doc.rect(PAGE_W / 2 - 42, accentY, 84, 1.4, 'F');
 
-  const cardX = M + 10;
-  const cardW = CW - 20;
-  const cardY = accentY + 14;
-  const cardH = 88;
-
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'F');
-  doc.setDrawColor(210, 218, 232);
-  doc.setLineWidth(0.25);
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'S');
-
-  doc.setFillColor(13, 27, 64);
-  doc.roundedRect(cardX, cardY, cardW, 11, 4, 4, 'F');
+  const cardX = M + 10; const cardW = CW - 20; const cardY = accentY + 14; const cardH = 88;
+  doc.setFillColor(255, 255, 255); doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'F');
+  doc.setDrawColor(210, 218, 232); doc.setLineWidth(0.25); doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, 'S');
+  doc.setFillColor(13, 27, 64); doc.roundedRect(cardX, cardY, cardW, 11, 4, 4, 'F');
   doc.rect(cardX, cardY + 6, cardW, 5, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(255, 255, 255);
   doc.text('FICHA DEL INFORME', cardX + 8, cardY + 7.5);
 
   let cy = cardY + 18;
@@ -273,76 +278,42 @@ function drawCoverPage(doc, {
     ['Actividades / Reportes', `${masterItems.length} / ${dailyLogs.length}`],
     ['Avance global', `${globalPct.toFixed(1)}%`],
   ];
-
   metaRows.forEach(([label, value]) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 112, 140);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(100, 112, 140);
     doc.text(label, cardX + 8, cy);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(25, 35, 65);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(25, 35, 65);
     doc.text(String(value), cardX + 52, cy);
     cy += 8;
   });
 
   let lines = [];
   if (showIncludedProjects && projectNames.length > 0) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(13, 27, 64);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(13, 27, 64);
     doc.text('Obras incluidas:', cardX + 8, cy + 2);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(55, 65, 95);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(55, 65, 95);
     const preview = projectNames.slice(0, 5).join('  ·  ');
     const suffix = projectNames.length > 5 ? `  (+${projectNames.length - 5} más)` : '';
     lines = doc.splitTextToSize(preview + suffix, cardW - 16);
     doc.text(lines, cardX + 8, cy + 7);
     cy += lines.length * 4 + 9;
   }
-  
-  const issuedBy = userName;
-  if (issuedBy) {
+
+  if (userName) {
     if (!showIncludedProjects || projectNames.length === 0) cy += 4;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(13, 27, 64);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(13, 27, 64);
     doc.text('Emitido por:', cardX + 8, cy);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(25, 35, 65);
-    doc.text(issuedBy, cardX + 52, cy);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(25, 35, 65);
+    doc.text(userName, cardX + 52, cy);
   }
 
   const barY = PAGE_H - 52;
-  doc.setFillColor(234, 179, 8);
-  doc.rect(0, barY, PAGE_W, 2, 'F');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(234, 179, 8);
+  doc.setFillColor(234, 179, 8); doc.rect(0, barY, PAGE_W, 2, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(234, 179, 8);
   doc.text('DOCUMENTO CONFIDENCIAL — USO INTERNO', PAGE_W / 2, PAGE_H - 38, { align: 'center' });
-
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7);
-  doc.setTextColor(175, 188, 215);
-  doc.text(
-    `Generado automáticamente · Control de Obras DGC · ${generatedAt}`,
-    PAGE_W / 2,
-    PAGE_H - 30,
-    { align: 'center' }
-  );
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(6.5);
-  doc.setTextColor(140, 155, 185);
-  doc.text(
-    'La reproducción parcial o total requiere autorización del área responsable.',
-    PAGE_W / 2,
-    PAGE_H - 22,
-    { align: 'center' }
-  );
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(175, 188, 215);
+  doc.text(`Generado automáticamente · Control de Obras DGC · ${generatedAt}`, PAGE_W / 2, PAGE_H - 30, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(140, 155, 185);
+  doc.text('La reproducción parcial o total requiere autorización del área responsable.', PAGE_W / 2, PAGE_H - 22, { align: 'center' });
 }
 
 export async function exportReportPDF(
@@ -357,23 +328,23 @@ export async function exportReportPDF(
   const projects = Array.isArray(projectsOrUserName) ? projectsOrUserName : [];
   const userName = Array.isArray(projectsOrUserName) ? userNameArg : projectsOrUserName;
   const showIncludedProjects = options.showIncludedProjects !== false;
+  const includeDailyReports = options.includeDailyReports !== false;
+  const includePhotos = options.includePhotos !== false;
+  const reportLogs = includeDailyReports ? dailyLogs : [];
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es });
   const todayShort = format(new Date(), 'yyyy-MM-dd');
-
   const logoData = await loadLogoDataUrl();
 
-  // ── KPIs globales ──────────────────────────────────────────────────────────
   const totalPlanned = masterItems.reduce((s, i) => s + (i.planned_qty || 0), 0);
   const totalExecuted = masterItems.reduce((s, i) => s + (i.executed_qty || 0), 0);
   const globalPct = totalPlanned > 0 ? (totalExecuted / totalPlanned) * 100 : 0;
   const completados = masterItems.filter(i => i.status === 'completado').length;
   const bloqueados = masterItems.filter(i => i.status === 'bloqueado').length;
   const enEjecucion = masterItems.filter(i => i.status === 'en_ejecucion').length;
-  const sortedAllLogs = [...dailyLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sortedAllLogs = [...reportLogs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const lastLogDate = sortedAllLogs[0]?.date || '—';
 
-  // Agrupar por proyecto
   const byProject = {};
   masterItems.forEach(item => {
     const p = item.project || 'Sin proyecto';
@@ -381,134 +352,99 @@ export async function exportReportPDF(
     byProject[p].push(item);
   });
 
-  // ══════════════════════════════════════════════════════════════
-  // PÁGINA 1: PORTADA PROFESIONAL (solo portada)
-  // ══════════════════════════════════════════════════════════════
-  drawCoverPage(doc, {
-    today,
-    todayShort,
-    logoData,
-    masterItems,
-    dailyLogs,
-    byProject,
-    globalPct,
-    lastLogDate,
-    userName,
-    showIncludedProjects,
-  });
+  // Mapa de logs por id para lookup rápido
+  const logsById = {};
+  reportLogs.forEach(log => { logsById[log.id] = log; });
 
   // ══════════════════════════════════════════════════════════════
-  // PÁGINA 2+: RESUMEN EJECUTIVO Y DETALLE
+  // PÁGINA 1: PORTADA
+  // ══════════════════════════════════════════════════════════════
+  drawCoverPage(doc, { today, todayShort, logoData, masterItems, dailyLogs: reportLogs, byProject, globalPct, lastLogDate, userName, showIncludedProjects });
+
+  // ══════════════════════════════════════════════════════════════
+  // PÁGINA 2+: RESUMEN EJECUTIVO
   // ══════════════════════════════════════════════════════════════
   doc.addPage();
   let y = addPageHeader(doc, today, logoData);
   y = addSectionTitle(doc, 'RESUMEN EJECUTIVO', y);
 
-  // KPI cards
   const kpis = [
     { label: 'Avance Global', value: `${globalPct.toFixed(1)}%`, color: globalPct >= 80 ? [34, 150, 60] : globalPct >= 50 ? [210, 130, 0] : [200, 50, 50] },
     { label: 'Total Ítems', value: masterItems.length, color: [40, 60, 110] },
     { label: 'En Ejecución', value: enEjecucion, color: [30, 100, 200] },
     { label: 'Completados', value: completados, color: [34, 150, 60] },
     { label: 'Bloqueados', value: bloqueados, color: [200, 50, 50] },
-    { label: 'Reportes Diarios', value: dailyLogs.length, color: [80, 80, 80] },
+    { label: 'Reportes Diarios', value: reportLogs.length, color: [80, 80, 80] },
   ];
   const kpiW = CW / 3 - 2;
   const kpiH = 16;
   kpis.forEach((k, i) => {
     const col = i % 3; const row = Math.floor(i / 3);
-    const kx = M + col * (kpiW + 3);
-    const ky = y + row * (kpiH + 3);
-    doc.setFillColor(248, 250, 254);
-    doc.roundedRect(kx, ky, kpiW, kpiH, 1.5, 1.5, 'F');
-    doc.setFillColor(...k.color);
-    doc.roundedRect(kx, ky, 2.5, kpiH, 1, 1, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-    doc.setTextColor(...k.color);
+    const kx = M + col * (kpiW + 3); const ky = y + row * (kpiH + 3);
+    doc.setFillColor(248, 250, 254); doc.roundedRect(kx, ky, kpiW, kpiH, 1.5, 1.5, 'F');
+    doc.setFillColor(...k.color); doc.roundedRect(kx, ky, 2.5, kpiH, 1, 1, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...k.color);
     doc.text(String(k.value), kx + 9, ky + 10);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
-    doc.setTextColor(100, 110, 130);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(100, 110, 130);
     doc.text(k.label, kx + 9, ky + 14.5);
   });
   y += kpiH * 2 + 12;
 
-  // Barra avance global
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-  doc.setTextColor(40, 60, 110);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(40, 60, 110);
   doc.text(`AVANCE GLOBAL: ${globalPct.toFixed(1)}%`, M, y);
   y += 3;
   drawProgressBar(doc, M, y, CW, 5, globalPct);
   y += 14;
 
-  // Tabla resumen por proyecto
   y = addSectionTitle(doc, 'RESUMEN POR PROYECTO', y);
 
   for (const [projectName, items] of Object.entries(byProject)) {
     const projPlanned = items.reduce((s, i) => s + (i.planned_qty || 0), 0);
     const projExecuted = items.reduce((s, i) => s + (i.executed_qty || 0), 0);
     const projPct = projPlanned > 0 ? (projExecuted / projPlanned * 100) : 0;
-    const projLogs = dailyLogs.filter(l => l.project === projectName).length;
+    const projLogs = reportLogs.filter(l => l.project === projectName).length;
 
     if (y + 8 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
 
-    doc.setFillColor(245, 247, 253);
-    doc.roundedRect(M, y, CW, 8, 1, 1, 'F');
-    doc.setDrawColor(210, 220, 240); doc.setLineWidth(0.15);
-    doc.roundedRect(M, y, CW, 8, 1, 1, 'S');
-
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-    doc.setTextColor(13, 27, 64);
+    doc.setFillColor(245, 247, 253); doc.roundedRect(M, y, CW, 8, 1, 1, 'F');
+    doc.setDrawColor(210, 220, 240); doc.setLineWidth(0.15); doc.roundedRect(M, y, CW, 8, 1, 1, 'S');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(13, 27, 64);
     doc.text(projectName, M + 3, y + 5.5);
-
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
-    doc.setTextColor(80, 90, 120);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(80, 90, 120);
     doc.text(`${items.length} ítems  ·  ${projLogs} reportes`, M + 80, y + 5.5);
-
     drawProgressBar(doc, M + 120, y + 2.5, 50, 3, projPct);
-
     const pctColor = projPct >= 80 ? [34, 150, 60] : projPct >= 50 ? [210, 130, 0] : [200, 50, 50];
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
-    doc.setTextColor(...pctColor);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...pctColor);
     doc.text(`${projPct.toFixed(1)}%`, M + CW - 3, y + 5.5, { align: 'right' });
-
     y += 10;
-    if (y + 46 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
 
+    if (y + 46 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
     const project = projectByName(projects, projectName);
     const infoCardH = drawProjectInfoCard(doc, project, M + 3, y, CW - 6);
     y += infoCardH + 5;
   }
 
   // ══════════════════════════════════════════════════════════════
-  // SECCIÓN 2: DETALLE POR PROYECTO (agrupado)
+  // SECCIÓN 2: DETALLE POR PROYECTO
   // ══════════════════════════════════════════════════════════════
   for (const [projectName, items] of Object.entries(byProject)) {
     doc.addPage();
     y = addPageHeader(doc, today, logoData);
 
-    // Encabezado de proyecto
-    doc.setFillColor(13, 27, 64);
-    doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
-    doc.setFillColor(234, 179, 8);
-    doc.roundedRect(M, y + 12, CW, 2, 0, 0, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
+    doc.setFillColor(13, 27, 64); doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
+    doc.setFillColor(234, 179, 8); doc.roundedRect(M, y + 12, CW, 2, 0, 0, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(255, 255, 255);
     doc.text(projectName, M + 4, y + 9);
 
     const projPlanned = items.reduce((s, i) => s + (i.planned_qty || 0), 0);
     const projExecuted = items.reduce((s, i) => s + (i.executed_qty || 0), 0);
     const projPct = projPlanned > 0 ? (projExecuted / projPlanned * 100) : 0;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    doc.setTextColor(180, 200, 230);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(180, 200, 230);
     doc.text(`${projPct.toFixed(1)}% avance  ·  ${projExecuted}/${projPlanned} und  ·  ${items.length} ítems`, M + CW - 3, y + 9, { align: 'right' });
     y += 20;
 
-    // Tabla de ítems del proyecto
-    // Cabecera de tabla
-    doc.setFillColor(60, 80, 140);
-    doc.rect(M, y, CW, 7, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
-    doc.setTextColor(255, 255, 255);
+    doc.setFillColor(60, 80, 140); doc.rect(M, y, CW, 7, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(255, 255, 255);
     doc.text('Torre / Piso / Actividad', M + 3, y + 5);
     doc.text('Cuadrilla', M + 80, y + 5);
     doc.text('Ejec / Plan', M + 115, y + 5);
@@ -520,30 +456,22 @@ export async function exportReportPDF(
       if (y + 8 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
       const pct = item.planned_qty > 0 ? ((item.executed_qty || 0) / item.planned_qty * 100) : 0;
       const rowBg = items.indexOf(item) % 2 === 0 ? [250, 251, 255] : [243, 245, 252];
-      doc.setFillColor(...rowBg);
-      doc.rect(M, y, CW, 8, 'F');
-      doc.setDrawColor(215, 220, 235); doc.setLineWidth(0.1);
-      doc.line(M, y + 8, M + CW, y + 8);
-
+      doc.setFillColor(...rowBg); doc.rect(M, y, CW, 8, 'F');
+      doc.setDrawColor(215, 220, 235); doc.setLineWidth(0.1); doc.line(M, y + 8, M + CW, y + 8);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(20, 30, 50);
       const itemLabel = [item.tower, item.floor, item.activity].filter(Boolean).join(' · ');
       doc.text(itemLabel.substring(0, 38), M + 3, y + 5.5);
-
       doc.setTextColor(60, 70, 100);
       doc.text((item.crew_name || '—').substring(0, 18), M + 80, y + 5.5);
       doc.text(`${item.executed_qty || 0} / ${item.planned_qty || 0} ${item.unit || 'und'}`, M + 115, y + 5.5);
-
       drawProgressBar(doc, M + 140, y + 3, 24, 3, pct);
-
       const stColors = { pendiente: [120, 120, 120], en_ejecucion: [30, 100, 200], completado: [34, 150, 60], bloqueado: [200, 50, 50] };
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(6);
-      doc.setTextColor(...(stColors[item.status] || [100, 100, 100]));
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...(stColors[item.status] || [100, 100, 100]));
       doc.text(statusLabel(item.status), M + 168, y + 5.5);
       y += 8;
     }
     y += 4;
 
-    // Ítems con restricción activa (resumen)
     const itemsConRestriccion = items.filter(i => i.restrictions);
     if (itemsConRestriccion.length > 0) {
       if (y + 10 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
@@ -554,108 +482,69 @@ export async function exportReportPDF(
         const rLines = doc.splitTextToSize(`${[item.tower, item.floor, item.activity].filter(Boolean).join(' · ')}: ${item.restrictions}`, CW - 10);
         const rH = rLines.length * 4 + 5;
         doc.roundedRect(M, y, CW, rH, 1, 1, 'F');
-        doc.setDrawColor(220, 60, 60); doc.setLineWidth(0.2);
-        doc.roundedRect(M, y, CW, rH, 1, 1, 'S');
+        doc.setDrawColor(220, 60, 60); doc.setLineWidth(0.2); doc.roundedRect(M, y, CW, rH, 1, 1, 'S');
         doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(160, 40, 40);
         doc.text(rLines, M + 4, y + 4.5);
         y += rH + 3;
       }
       y += 4;
     }
-
-    // Fotos del proyecto
-    const projPhotos = sitePhotos.filter(p => {
-      const mi = masterItems.find(i => i.id === p.master_item_id);
-      return mi?.project === projectName;
-    });
-    if (projPhotos.length > 0) {
-      if (y + 10 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-      y = addSectionTitle(doc, `FOTOS DE OBRA`, y);
-      y = await renderPhotos(doc, projPhotos, y, today, logoData);
-    }
   }
 
   // ══════════════════════════════════════════════════════════════
-  // SECCIÓN 3: REPORTES DIARIOS (todos, ordenados por fecha desc)
+  // SECCIÓN 3: REPORTES DIARIOS
   // ══════════════════════════════════════════════════════════════
-  if (sortedAllLogs.length > 0) {
-    doc.addPage();
-    y = addPageHeader(doc, today, logoData);
+  if (includeDailyReports && sortedAllLogs.length > 0) {
+    for (const [logIndex, log] of sortedAllLogs.entries()) {
+      doc.addPage();
+      y = addPageHeader(doc, today, logoData);
 
-    // Encabezado de sección
-    doc.setFillColor(13, 27, 64);
-    doc.roundedRect(M, y, CW, 14, 2, 2, 'F');
-    doc.setFillColor(234, 179, 8);
-    doc.roundedRect(M, y + 12, CW, 2, 0, 0, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.setTextColor(255, 255, 255);
-    doc.text('REPORTES DIARIOS', M + 4, y + 9);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
-    doc.setTextColor(180, 200, 230);
-    doc.text(`${sortedAllLogs.length} registros  ·  Último: ${lastLogDate}`, M + CW - 3, y + 9, { align: 'right' });
-    y += 20;
-
-    for (const log of sortedAllLogs) {
       const logItem = masterItems.find(i => i.id === log.master_item_id);
-      const logPhotos = sitePhotos.filter(p =>
-        p.daily_log_id === log.id ||
-        (p.master_item_id === log.master_item_id && p.date === log.date)
-      );
+      const logPhotos = sitePhotos.filter(p => p.daily_log_id === log.id);
 
-      if (y + 28 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-
-      // Encabezado del log
-      doc.setFillColor(45, 70, 140);
-      doc.roundedRect(M, y, CW, 8, 1, 1, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-      doc.setTextColor(255, 255, 255);
-      const logTitle = [log.date, log.project, log.tower, log.floor, log.activity].filter(Boolean).join('  ·  ');
+      doc.setFillColor(45, 70, 140); doc.roundedRect(M, y, CW, 8, 1, 1, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(255, 255, 255);
+      const logTitle = [`Reporte ${logIndex + 1}`, log.date, log.project, log.tower, log.floor, log.activity].filter(Boolean).join('  -  ');
       doc.text(logTitle, M + 3, y + 5.5);
       if (log.supervisor) {
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
-        doc.setTextColor(180, 200, 230);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(180, 200, 230);
         doc.text(`Supervisor: ${log.supervisor}`, M + CW - 3, y + 5.5, { align: 'right' });
       }
       y += 10;
 
-      // Métricas
-      doc.setFillColor(245, 248, 255);
-      doc.roundedRect(M, y, CW, 10, 1, 1, 'F');
-      doc.setDrawColor(210, 220, 240); doc.setLineWidth(0.15);
-      doc.roundedRect(M, y, CW, 10, 1, 1, 'S');
+      doc.setFillColor(245, 248, 255); doc.roundedRect(M, y, CW, 10, 1, 1, 'F');
+      doc.setDrawColor(210, 220, 240); doc.setLineWidth(0.15); doc.roundedRect(M, y, CW, 10, 1, 1, 'S');
       const mW = CW / 4;
       const metrics = [
         ['Ejecutado hoy', `${log.executed_today ?? 0} ${logItem?.unit || 'und'}`],
         ['Horas trabajadas', `${log.hours_worked || 0}h`],
         ['Personal', `${log.crew_workers?.length || 0} pers.`],
-        ['Restricción', log.has_restriction ? '⚠ Sí' : 'No'],
+        ['Restriccion', log.has_restriction ? 'Si' : 'No'],
       ];
       metrics.forEach(([label, val], i) => {
         const mx = M + i * mW + 3;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(100, 110, 130);
         doc.text(label, mx, y + 4);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
-        if (label === 'Restricción' && log.has_restriction) doc.setTextColor(200, 50, 50);
+        if (label === 'Restriccion' && log.has_restriction) doc.setTextColor(200, 50, 50);
         else doc.setTextColor(20, 40, 90);
         doc.text(val, mx, y + 9);
       });
       y += 12;
 
-      // Personal del día
       if (log.crew_workers?.length > 0) {
-        if (y + 5 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
+        y = ensureSpace(doc, y, 5, today, logoData, REPORT_SIGNATURE_TOP);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(60, 80, 120);
         doc.text('Personal presente:', M + 4, y + 3);
         y += 6;
-        // Tabla compacta de personal
         log.crew_workers.forEach((w, wi) => {
-          if (y + 4.5 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-          if (wi % 2 === 0) { doc.setFillColor(248, 250, 254); } else { doc.setFillColor(255, 255, 255); }
+          y = ensureSpace(doc, y, 4.5, today, logoData, REPORT_SIGNATURE_TOP);
+          doc.setFillColor(wi % 2 === 0 ? 248 : 255, wi % 2 === 0 ? 250 : 255, wi % 2 === 0 ? 254 : 255);
           doc.rect(M + 4, y - 1, CW - 4, 4.5, 'F');
           doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(40, 40, 40);
-          doc.text(`${w.name || '—'}`, M + 7, y + 2.5);
+          doc.text(`${w.name || '---'}`, M + 7, y + 2.5);
           doc.setTextColor(80, 90, 120);
-          doc.text(w.role || '—', M + 65, y + 2.5);
+          doc.text(w.role || '---', M + 65, y + 2.5);
           if (w.hours) doc.text(`${w.hours}h`, M + 110, y + 2.5);
           if (w.executed) doc.text(`${w.executed} und`, M + 130, y + 2.5);
           y += 4.5;
@@ -663,52 +552,42 @@ export async function exportReportPDF(
         y += 2;
       }
 
-      // Restricción detalle
       if (log.has_restriction && log.restriction_detail) {
-        if (y + 10 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-        doc.setFillColor(255, 243, 240);
-        const rLines = doc.splitTextToSize(`⚠ ${log.restriction_detail}`, CW - 10);
+        const rLines = doc.splitTextToSize(`Restriccion: ${log.restriction_detail}`, CW - 10);
         const rH = rLines.length * 4 + 5;
-        doc.roundedRect(M, y, CW, rH, 1, 1, 'F');
-        doc.setDrawColor(220, 60, 60); doc.setLineWidth(0.2);
-        doc.roundedRect(M, y, CW, rH, 1, 1, 'S');
+        y = ensureSpace(doc, y, rH + 3, today, logoData, REPORT_SIGNATURE_TOP);
+        doc.setFillColor(255, 243, 240); doc.roundedRect(M, y, CW, rH, 1, 1, 'F');
+        doc.setDrawColor(220, 60, 60); doc.setLineWidth(0.2); doc.roundedRect(M, y, CW, rH, 1, 1, 'S');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(180, 40, 40);
         doc.text(rLines, M + 4, y + 4.5);
         y += rH + 3;
       }
 
-      // Observaciones
       if (log.observations) {
-        if (y + 8 > PAGE_H - 14) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-        doc.setFillColor(245, 248, 255);
         const oLines = doc.splitTextToSize(log.observations, CW - 10);
         const oH = oLines.length * 4 + 5;
-        doc.roundedRect(M, y, CW, oH, 1, 1, 'F');
+        y = ensureSpace(doc, y, oH + 3, today, logoData, REPORT_SIGNATURE_TOP);
+        doc.setFillColor(245, 248, 255); doc.roundedRect(M, y, CW, oH, 1, 1, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(40, 60, 110);
-        doc.text('Obs:', M + 4, y + 4.5);
+        doc.text('Observaciones:', M + 4, y + 4.5);
         doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 60, 80);
         doc.text(oLines, M + 14, y + 4.5);
         y += oH + 3;
       }
 
-      // Fotos del reporte
-      if (logPhotos.length > 0) {
-        y = await renderPhotos(doc, logPhotos, y, today, logoData);
+      if (includePhotos && logPhotos.length > 0) {
+        y = await renderPhotos(doc, logPhotos, y, today, logoData, { bottomLimit: REPORT_SIGNATURE_TOP });
       }
 
-      // Separador
-      y += 2;
-      doc.setDrawColor(200, 210, 235); doc.setLineWidth(0.15);
-      doc.line(M, y, M + CW, y);
-      y += 5;
+      y = ensureSpace(doc, y, 38, today, logoData, REPORT_SIGNATURE_TOP);
+      y = await drawCapatazSignature(doc, log);
     }
   }
 
-  // ── Pie de página / cierre ─────────────────────────────────────────────────
+  // ── Cierre ─────────────────────────────────────────────────────────────────
   if (y + 20 > PAGE_H - 12) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
   y += 6;
-  doc.setDrawColor(210, 218, 235); doc.setLineWidth(0.3);
-  doc.line(M, y, M + CW, y);
+  doc.setDrawColor(210, 218, 235); doc.setLineWidth(0.3); doc.line(M, y, M + CW, y);
   y += 5;
 
   doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(80, 90, 110);
@@ -720,8 +599,7 @@ export async function exportReportPDF(
   ];
   let lx = M + 22;
   legends.forEach(l => {
-    doc.setFillColor(...l.color);
-    doc.rect(lx, y - 3, 3, 3, 'F');
+    doc.setFillColor(...l.color); doc.rect(lx, y - 3, 3, 3, 'F');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(80, 90, 110);
     doc.text(l.label, lx + 4.5, y);
     lx += 52;

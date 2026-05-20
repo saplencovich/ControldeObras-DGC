@@ -7,6 +7,7 @@ import { TrendingUp, Users, Activity, Zap } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { format, parse } from 'date-fns';
+import { api } from '@/lib/api';
 
 export default function ProductivityAnalytics() {
   const { hasAccessToProject, userRole } = usePermissions();
@@ -16,17 +17,17 @@ export default function ProductivityAnalytics() {
 
   const { data: dailyLogs = [], isLoading: logsLoading } = useQuery({
     queryKey: ['dailyLogs'],
-    queryFn: () => base44.entities.DailyLog.list('-date', 1000),
+    queryFn: () => api.get('/daily-logs'),
   });
 
   const { data: masterItems = [] } = useQuery({
     queryKey: ['masterItems'],
-    queryFn: () => base44.entities.MasterItem.list('-created_date', 500),
+    queryFn: () => api.get('/master-items'),
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => base44.entities.Project.list(),
+    queryFn: () => api.get('/projects'),
   });
 
   const handleProjectChange = (project) => {
