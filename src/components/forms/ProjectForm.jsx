@@ -59,7 +59,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
     enabled: open,
   });
 
-  const isLocalMode = true;
+
 
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [saving, setSaving] = useState(false);
@@ -184,7 +184,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
     }
   };
 
-  if (!isLocalMode && !canCreateProjects) {
+  if (!canCreateProjects) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
@@ -196,7 +196,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
           </DialogHeader>
           <div>
             <p className="text-sm text-muted-foreground">
-              Solo supervisores y administradores pueden crear nuevas obras.
+              Solo administradores pueden crear nuevas obras.
             </p>
           </div>
           <DialogFooter>

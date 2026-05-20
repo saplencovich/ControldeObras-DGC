@@ -136,11 +136,13 @@ export default function MasterItemForm({
     queryFn: () => api.get("/master-items"),
   });
 
-  // Modo local para no bloquear proyectos por permisos mientras desarrollas.
-  const isLocalMode = true;
+  const { data: projectWorkers = [] } = useQuery({
+    queryKey: ["projectWorkers"],
+    queryFn: () => api.get("/project-workers"),
+  });
 
   const filteredProjects =
-    isLocalMode || userRole === "admin"
+    userRole === "admin"
       ? projects
       : projects.filter((project) => hasAccessToProject(project.name));
 
@@ -148,6 +150,10 @@ export default function MasterItemForm({
   const [crewMembers, setCrewMembers] = useState([{ ...EMPTY_MEMBER }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const currentProjectWorkers = projectWorkers.filter(
+    (w) => w.project === form.project
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -184,9 +190,17 @@ export default function MasterItemForm({
 
   const updateMember = (index, field, value) => {
     setCrewMembers((prev) =>
-      prev.map((member, i) =>
-        i === index ? { ...member, [field]: value } : member
-      )
+      prev.map((member, i) => {
+        if (i !== index) return member;
+        const updated = { ...member, [field]: value };
+        if (field === "name") {
+          const worker = currentProjectWorkers.find((w) => w.name === value);
+          if (worker) {
+            updated.role = worker.role || "";
+          }
+        }
+        return updated;
+      })
     );
   };
 
@@ -546,23 +560,38 @@ export default function MasterItemForm({
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
               {crewMembers.map((member, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <AutocompleteInput
+                  <Select
                     value={member.name}
-                    onChange={(e) =>
-                      updateMember(index, "name", e.target.value)
-                    }
-                    options={uniqueMemberNames}
-                    placeholder="Nombre"
-                    className="h-8 flex-1 text-xs"
-                  />
+                    onValueChange={(val) => updateMember(index, "name", val)}
+                  >
+                    <SelectTrigger className="h-8 flex-1 text-xs">
+                      <SelectValue placeholder="Seleccionar integrante..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {member.name && !currentProjectWorkers.some(w => w.name === member.name) && (
+                        <SelectItem key={member.name} value={member.name}>
+                          {member.name}
+                        </SelectItem>
+                      )}
+                      {currentProjectWorkers.length === 0 ? (
+                        <SelectItem value="__none_w__" disabled className="text-xs">
+                          Sin personal registrado
+                        </SelectItem>
+                      ) : (
+                        currentProjectWorkers.map((w) => (
+                          <SelectItem key={w.id} value={w.name} className="text-xs">
+                            {w.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
 
                   <Input
                     value={member.role}
-                    onChange={(e) =>
-                      updateMember(index, "role", e.target.value)
-                    }
-                    placeholder="Cargo"
-                    className="h-8 w-32 text-xs"
+                    readOnly
+                    placeholder="Cargo (Automático)"
+                    className="h-8 w-32 text-xs bg-muted/50 text-muted-foreground select-none"
                   />
 
                   <Button
@@ -651,17 +680,6 @@ export default function MasterItemForm({
             {saving ? "Guardando..." : editItem ? "Actualizar" : "Crear Ítem"}
           </Button>
 
-          {!editItem && onSaveAndLog && (
-            <Button
-              variant="default"
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleSaveAndLog}
-              disabled={isFormInvalid}
-            >
-              <ClipboardList className="h-4 w-4" />
-              {saving ? "Guardando..." : "Crear y agregar reporte"}
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

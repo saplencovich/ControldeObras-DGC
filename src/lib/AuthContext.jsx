@@ -11,13 +11,52 @@ export function AuthProvider({ children }) {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   useEffect(() => {
-    const savedUser = window.localStorage.getItem(STORAGE_KEY);
+    const checkAuth = async () => {
+      const savedUserStr = window.localStorage.getItem(STORAGE_KEY);
+      if (!savedUserStr) {
+        setIsLoadingAuth(false);
+        return;
+      }
 
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+      let savedUser = null;
+      try {
+        savedUser = JSON.parse(savedUserStr);
+        if (savedUser) {
+          setUser(savedUser);
+        }
+      } catch (err) {
+        console.error('Error parsing saved user:', err);
+      }
 
-    setIsLoadingAuth(false);
+      if (savedUser && savedUser.email) {
+        try {
+          const response = await fetch(`${API_URL}/auth/me`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-email': savedUser.email,
+            },
+          });
+
+          if (response.ok) {
+            const freshUser = await response.json();
+            if (freshUser) {
+              setUser(freshUser);
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
+            }
+          } else if (response.status === 401 || response.status === 404) {
+            setUser(null);
+            window.localStorage.removeItem(STORAGE_KEY);
+          }
+        } catch (error) {
+          console.error('Error refreshing session:', error);
+        }
+      }
+
+      setIsLoadingAuth(false);
+    };
+
+    checkAuth();
   }, []);
 
   const login = async ({ email, password }) => {

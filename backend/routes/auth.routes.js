@@ -38,4 +38,32 @@ router.post("/login", (req, res) => {
   );
 });
 
+router.get("/me", (req, res) => {
+  const email = req.headers["x-user-email"];
+
+  if (!email) {
+    return res.status(401).json({ error: "No autorizado. Falta cabecera x-user-email." });
+  }
+
+  db.get(
+    "SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) AND active = 1",
+    [email],
+    (err, user) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado o inactivo." });
+      }
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        allowed_projects: JSON.parse(user.allowed_projects || "[]"),
+      });
+    }
+  );
+});
+
 module.exports = router;
