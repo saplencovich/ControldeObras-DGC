@@ -58,6 +58,25 @@ function getProgressPct(item) {
   return Math.min(Math.round((executed / planned) * 100), 100);
 }
 
+function getDaysDelayed(item) {
+  const pct = getProgressPct(item);
+  if (pct >= 100) return 0;
+
+  if (!item?.end_date) return 0;
+
+  const endDate = new Date(item.end_date + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (today > endDate) {
+    const diffTime = today - endDate;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  }
+
+  return 0;
+}
+
 function getProductivityColor(pct) {
   if (pct >= 100) return "bg-emerald-500";
   if (pct >= 75) return "bg-emerald-300";
@@ -308,11 +327,21 @@ export default function MasterPlanTable({
                       <FloorsDisplay floor={row.displayFloor} compact />
                     </div>
                   </div>
-                  <Badge
-                    className={`text-[10px] ${statusBadge[row.status] || statusBadge.pendiente}`}
-                  >
-                    {statusLabel[row.status] || row.status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <Badge
+                      className={`text-[10px] ${statusBadge[row.status] || statusBadge.pendiente}`}
+                    >
+                      {statusLabel[row.status] || row.status}
+                    </Badge>
+                    {(() => {
+                      const days = getDaysDelayed(row);
+                      return days > 0 ? (
+                        <Badge className="text-[10px] bg-red-100 text-red-700 border border-red-200 hover:bg-red-100">
+                          {days}d de atraso
+                        </Badge>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
                 <div className="mb-2 grid grid-cols-2 gap-2 text-[11px]">
                   <div>
@@ -399,6 +428,7 @@ export default function MasterPlanTable({
                 <TableHead className="text-xs hidden xl:table-cell">Supervisor</TableHead>
                 <TableHead className="text-xs hidden lg:table-cell">Torre</TableHead>
                 <TableHead className="text-xs">Piso</TableHead>
+                <TableHead className="text-xs text-center min-w-[70px]">Atrasos</TableHead>
                 <TableHead className="text-xs">Actividad</TableHead>
                 <TableHead className="min-w-[92px] whitespace-nowrap text-xs hidden lg:table-cell">
                   F. Inicio
@@ -424,7 +454,7 @@ export default function MasterPlanTable({
               {displayRows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={17}
+                    colSpan={100}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
                     No hay ítems en el plan maestro. Crea uno nuevo para
@@ -436,6 +466,7 @@ export default function MasterPlanTable({
               {pageRows.map((row) => {
                 const itemId = Number(row.id);
                 const pct = getProgressPct(row);
+                const daysDelayed = getDaysDelayed(row);
                 const prodColor = getProductivityColor(pct);
                 const itemLogs = (logsByItemId[itemId] || []).filter((log) =>
                   logBelongsToFloor(log, row),
@@ -477,8 +508,18 @@ export default function MasterPlanTable({
                       </TableCell>
 
                       <TableCell className="hidden lg:table-cell">{row.tower || "—"}</TableCell>
-                      <TableCell className="min-w-[160px] max-w-[240px]">
+                       <TableCell className="min-w-[160px] max-w-[240px]">
                         <FloorsDisplay floor={row.displayFloor} />
+                      </TableCell>
+
+                      <TableCell className="text-center font-mono font-medium">
+                        {daysDelayed > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-red-50 text-red-600 border border-red-200">
+                            {daysDelayed}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/30">—</span>
+                        )}
                       </TableCell>
 
                       <TableCell className="font-medium">
