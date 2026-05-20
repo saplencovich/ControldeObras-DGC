@@ -54,7 +54,7 @@ export default function ItemInfo({ item }) {
             <p className="text-sm font-medium">{item.crew_name || '—'} ({crewSize} pers.)</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Plan / Ejecutado</p>
+            <p className="text-xs text-muted-foreground">Ejecutado / Plan </p>
             <p className="text-sm font-medium">{item.executed_qty || 0} / {item.planned_qty} {item.unit}</p>
           </div>
         </div>

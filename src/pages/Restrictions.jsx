@@ -4,13 +4,6 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   AlertTriangle,
   AlertCircle,
   CheckCircle2,
@@ -20,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import FilterPill from '@/components/common/FilterPill';
 
 export default function Restrictions() {
   const navigate = useNavigate();
@@ -183,33 +177,19 @@ export default function Restrictions() {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Select value={selectedProject} onValueChange={setSelectedProject}>
-          <SelectTrigger className="h-8 w-full sm:w-48 text-xs">
-            <SelectValue placeholder="Filtrar por obra" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las obras</SelectItem>
-            {filteredProjects.map((p) => (
-              <SelectItem key={p.id} value={p.name}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterPill
+          label="Obra"
+          value={selectedProject}
+          options={filteredProjects.map((p) => p.name)}
+          onChange={setSelectedProject}
+        />
 
-        <Select value={selectedActivity} onValueChange={setSelectedActivity}>
-          <SelectTrigger className="h-8 w-full sm:w-48 text-xs">
-            <SelectValue placeholder="Filtrar por actividad" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las actividades</SelectItem>
-            {uniqueActivities.map((act) => (
-              <SelectItem key={act} value={act}>
-                {act}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterPill
+          label="Actividad"
+          value={selectedActivity}
+          options={uniqueActivities}
+          onChange={setSelectedActivity}
+        />
       </div>
 
       <Card className="border-0 shadow-sm">
