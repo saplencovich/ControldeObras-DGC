@@ -1,8 +1,12 @@
-import React from 'react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronDown, Check } from 'lucide-react';
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 export default function FilterPill({ label, value, placeholder = 'Todas', options = [], onChange }) {
   const active = Boolean(value && value !== 'all');

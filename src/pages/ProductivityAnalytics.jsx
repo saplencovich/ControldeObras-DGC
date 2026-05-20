@@ -8,11 +8,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { format, parse } from 'date-fns';
 import { api } from '@/lib/api';
+import FilterPill from '@/components/common/FilterPill';
 
 export default function ProductivityAnalytics() {
   const { hasAccessToProject, userRole } = usePermissions();
   const [selectedProject, setSelectedProject] = useState('all');
   const [selectedCrew, setSelectedCrew] = useState('all');
+  const [selectedActivity, setSelectedActivity] = useState('all');
   const [sortBy, setSortBy] = useState('productivity');
 
   const { data: dailyLogs = [], isLoading: logsLoading } = useQuery({
@@ -33,6 +35,7 @@ export default function ProductivityAnalytics() {
   const handleProjectChange = (project) => {
     setSelectedProject(project);
     setSelectedCrew('all');
+    setSelectedActivity('all');
   };
 
   // Filtrar proyectos según permisos
@@ -40,17 +43,32 @@ export default function ProductivityAnalytics() {
     ? projects
     : projects.filter(p => hasAccessToProject(p.name));
 
-  // Logs filtrados
-  const filteredLogs = selectedProject === 'all'
-    ? dailyLogs.filter(log => userRole === 'admin' || hasAccessToProject(log.project))
-    : dailyLogs.filter(log => log.project === selectedProject && (userRole === 'admin' || hasAccessToProject(log.project)));
+  // Logs filtrados por obra y acceso
+  const projectLogs = useMemo(() => {
+    return dailyLogs.filter(log => {
+      const matchesAccess = userRole === 'admin' || hasAccessToProject(log.project);
+      if (!matchesAccess) return false;
+      if (selectedProject !== 'all' && log.project !== selectedProject) return false;
+      return true;
+    });
+  }, [dailyLogs, selectedProject, userRole, hasAccessToProject]);
 
-  // Obtener cuadrillas únicas desde crew_name
-  const crewNames = [...new Set(filteredLogs.map(l => l.crew_name).filter(Boolean))];
+  // Obtener cuadrillas y actividades únicas según obra seleccionada
+  const crewNames = useMemo(() => {
+    return [...new Set(projectLogs.map(l => l.crew_name).filter(Boolean))];
+  }, [projectLogs]);
 
-  const selectedLogs = selectedCrew === 'all'
-    ? filteredLogs
-    : filteredLogs.filter(log => log.crew_name === selectedCrew);
+  const uniqueActivities = useMemo(() => {
+    return [...new Set(projectLogs.map(l => l.activity).filter(Boolean))];
+  }, [projectLogs]);
+
+  const selectedLogs = useMemo(() => {
+    return projectLogs.filter(log => {
+      if (selectedCrew !== 'all' && log.crew_name !== selectedCrew) return false;
+      if (selectedActivity !== 'all' && log.activity !== selectedActivity) return false;
+      return true;
+    });
+  }, [projectLogs, selectedCrew, selectedActivity]);
 
   const totals = useMemo(() => {
     const executed = selectedLogs.reduce((sum, log) => sum + (log.executed_today || 0), 0);
@@ -187,26 +205,20 @@ export default function ProductivityAnalytics() {
       </div>
 
       {/* Filtros */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Select value={selectedProject} onValueChange={handleProjectChange}>
-          <SelectTrigger className="h-8 w-48 text-xs">
-            <SelectValue placeholder="Filtrar por obra" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las obras</SelectItem>
-            {filteredProjects.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <FilterPill
+          label="Obra"
+          value={selectedProject}
+          options={filteredProjects.map((p) => p.name)}
+          onChange={handleProjectChange}
+        />
 
-        <Select value={selectedCrew} onValueChange={setSelectedCrew}>
-          <SelectTrigger className="h-8 w-48 text-xs">
-            <SelectValue placeholder="Filtrar por cuadrilla" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las cuadrillas</SelectItem>
-            {crewNames.map(crew => <SelectItem key={crew} value={crew}>{crew || 'Sin cuadrilla'}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <FilterPill
+          label="Cuadrilla"
+          value={selectedCrew}
+          options={crewNames}
+          onChange={setSelectedCrew}
+        />
       </div>
 
       {/* KPI Cards */}
