@@ -1,9 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Camera, Plus, X, Trash2 } from "lucide-react";
+import { Camera, X, Trash2, CalendarDays } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePermissions } from "@/lib/PermissionsContext";
 
@@ -12,13 +12,6 @@ const SERVER_URL = (
 ).replace(/\/api\/?$/, "");
 
 const CONFIRM_WORD = "BORRAR";
-
-const labelMap = {
-  reporte_diario: "Reporte Diario",
-  item_maestro: "Ítem Maestro",
-  restriccion: "Restricción",
-  otro: "Otro",
-};
 
 function getPhotoSrc(photo) {
   if (!photo) return "";
@@ -29,17 +22,12 @@ function getPhotoSrc(photo) {
   return photo.file_url || photo.url || "";
 }
 
-// Modal de confirmación con dos pasos
-function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
+function DeleteConfirmModal({ onConfirm, onCancel, deleting }) {
   const [step, setStep] = useState(1);
   const [inputWord, setInputWord] = useState("");
 
-  const handleFirstConfirm = () => setStep(2);
-
   const handleDelete = () => {
-    if (inputWord.trim().toUpperCase() === CONFIRM_WORD) {
-      onConfirm();
-    }
+    if (inputWord.trim().toUpperCase() === CONFIRM_WORD) onConfirm();
   };
 
   return (
@@ -53,28 +41,17 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <Trash2 className="h-6 w-6 text-red-600" />
             </div>
-
-            <h3 className="mb-1 text-base font-semibold">
-              ¿Eliminar esta foto?
-            </h3>
-
+            <h3 className="mb-1 text-base font-semibold">¿Eliminar esta foto?</h3>
             <p className="mb-6 text-sm text-muted-foreground">
               Esta acción es permanente y no se puede deshacer.
             </p>
-
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={onCancel}
-                disabled={deleting}
-              >
+              <Button variant="outline" className="flex-1" onClick={onCancel} disabled={deleting}>
                 Cancelar
               </Button>
-
               <Button
                 className="flex-1 bg-red-600 text-white hover:bg-red-700"
-                onClick={handleFirstConfirm}
+                onClick={() => setStep(2)}
                 disabled={deleting}
               >
                 Borrar
@@ -86,19 +63,12 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <Trash2 className="h-6 w-6 text-red-600" />
             </div>
-
-            <h3 className="mb-1 text-base font-semibold">
-              Confirmación final
-            </h3>
-
+            <h3 className="mb-1 text-base font-semibold">Confirmación final</h3>
             <p className="mb-4 text-sm text-muted-foreground">
               Escribe{" "}
-              <span className="font-mono font-bold text-red-600">
-                {CONFIRM_WORD}
-              </span>{" "}
+              <span className="font-mono font-bold text-red-600">{CONFIRM_WORD}</span>{" "}
               para eliminar permanentemente esta foto.
             </p>
-
             <Input
               value={inputWord}
               onChange={(e) => setInputWord(e.target.value)}
@@ -107,23 +77,14 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && handleDelete()}
             />
-
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={onCancel}
-                disabled={deleting}
-              >
+              <Button variant="outline" className="flex-1" onClick={onCancel} disabled={deleting}>
                 Cancelar
               </Button>
-
               <Button
                 className="flex-1 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                 onClick={handleDelete}
-                disabled={
-                  inputWord.trim().toUpperCase() !== CONFIRM_WORD || deleting
-                }
+                disabled={inputWord.trim().toUpperCase() !== CONFIRM_WORD || deleting}
               >
                 {deleting ? "Borrando..." : "Eliminar definitivamente"}
               </Button>
@@ -135,79 +96,48 @@ function DeleteConfirmModal({ photo, onConfirm, onCancel, deleting }) {
   );
 }
 
-export default function PhotoGallery({
-  photos = [],
-  masterItemId,
-  onPhotoAdded,
-}) {
-  const { canDelete, canCreateReport, canCreateItem } = usePermissions();
+function PhotoCard({ photo, onPreview, onDelete, canDelete }) {
+  return (
+    <div className="group relative overflow-hidden rounded-lg border">
+      <button type="button" className="w-full text-left" onClick={() => onPreview(photo)}>
+        <img
+          src={getPhotoSrc(photo)}
+          alt={photo.description || "Foto de obra"}
+          className="h-32 w-full object-cover transition-transform group-hover:scale-105"
+        />
+      </button>
 
-  const canUploadPhotos = canCreateReport || canCreateItem;
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+        {photo.description && (
+          <p className="truncate text-[10px] text-white/90">{photo.description}</p>
+        )}
+      </div>
 
-  const [uploading, setUploading] = useState(false);
+      {canDelete && (
+        <button
+          type="button"
+          className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
+          onClick={(e) => { e.stopPropagation(); onDelete(photo); }}
+          title="Eliminar foto"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function PhotoGallery({ photos = [], onPhotoAdded }) {
+  const { canDelete } = usePermissions();
   const [preview, setPreview] = useState(null);
   const [photoToDelete, setPhotoToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const handleUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!canUploadPhotos) {
-      alert("No tienes permiso para agregar fotos.");
-      event.target.value = "";
-      return;
-    }
-
-    if (!masterItemId) {
-      alert("No hay ítem asociado para guardar la foto.");
-      event.target.value = "";
-      return;
-    }
-
-    try {
-      setUploading(true);
-
-      const uploadData = await api.uploadPhoto(file);
-      const fileUrl = uploadData?.file_url;
-
-      if (!fileUrl) {
-        throw new Error("El servidor no devolvió la URL de archivo.");
-      }
-
-      await api.post("/site-photos", {
-        master_item_id: masterItemId,
-        file_url: fileUrl,
-        description: "",
-        date: new Date().toISOString().split("T")[0],
-        label: "item_maestro",
-      });
-
-      onPhotoAdded?.();
-    } catch (error) {
-      console.error("Error al subir foto:", error);
-      alert(error.message || "No se pudo subir la foto.");
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
-  };
 
   const handleDeleteConfirm = async () => {
-    if (!canDelete) {
-      alert("No tienes permiso para eliminar fotos.");
-      setPhotoToDelete(null);
-      return;
-    }
-
-    if (!photoToDelete) return;
-
+    if (!canDelete || !photoToDelete) return;
     try {
       setDeleting(true);
-
       await api.delete(`/site-photos/${photoToDelete.id}`);
-
       onPhotoAdded?.();
       setPhotoToDelete(null);
     } catch (error) {
@@ -218,99 +148,101 @@ export default function PhotoGallery({
     }
   };
 
+  // Agrupar por daily_log_id
+  const grouped = {};
+  const ungrouped = [];
+
+  photos.forEach((photo) => {
+    if (photo.daily_log_id) {
+      if (!grouped[photo.daily_log_id]) {
+        grouped[photo.daily_log_id] = { date: photo.date, photos: [] };
+      }
+      grouped[photo.daily_log_id].photos.push(photo);
+    } else {
+      ungrouped.push(photo);
+    }
+  });
+
+  const sortedGroups = Object.entries(grouped).sort(
+    ([, a], [, b]) => (b.date || "").localeCompare(a.date || "")
+  );
+
   return (
     <>
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base font-semibold">
-              <Camera className="h-4 w-4 text-accent" />
-              Registro Fotográfico
-            </CardTitle>
-
-            {canUploadPhotos && (
-              <div>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 gap-1.5 text-xs"
-                  disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Plus className="h-3 w-3" />
-                  {uploading ? "Subiendo..." : "Agregar Foto"}
-                </Button>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleUpload}
-                />
-              </div>
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <Camera className="h-4 w-4 text-accent" />
+            Registro Fotográfico
+            {photos.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {photos.length} foto{photos.length !== 1 ? "s" : ""}
+              </Badge>
             )}
-          </div>
+          </CardTitle>
         </CardHeader>
 
         <CardContent>
           {photos.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Sin fotografías registradas
+              Sin fotografías registradas. Las fotos se agregan desde los reportes diarios.
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-              {photos.map((photo) => (
-                <div
-                  key={photo.id}
-                  className="group relative overflow-hidden rounded-lg border"
-                >
-                  {/* Imagen clickeable para preview */}
-                  <button
-                    type="button"
-                    className="w-full text-left"
-                    onClick={() => setPreview(photo)}
-                  >
-                    <img
-                      src={getPhotoSrc(photo)}
-                      alt={photo.description || "Foto de obra"}
-                      className="h-32 w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                  </button>
-
-                  {/* Info en la parte inferior */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                    <Badge className="border-0 bg-white/20 text-[9px] text-white">
-                      {labelMap[photo.label] || photo.label || "Otro"}
+            <div className="space-y-6">
+              {sortedGroups.map(([logId, group]) => (
+                <div key={logId}>
+                  <div className="mb-3 flex items-center gap-2 border-b pb-2">
+                    <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-semibold text-foreground">
+                      Reporte del {group.date || "Sin fecha"}
+                    </span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {group.photos.length} foto{group.photos.length !== 1 ? "s" : ""}
                     </Badge>
-
-                    <p className="mt-0.5 text-[10px] text-white/80">
-                      {photo.date || "Sin fecha"}
-                    </p>
                   </div>
-
-                  {/* Botón borrar — solo usuarios con permiso */}
-                  {canDelete && (
-                    <button
-                      type="button"
-                      className="absolute bottom-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPhotoToDelete(photo);
-                      }}
-                      title="Eliminar foto"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  )}
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    {group.photos.map((photo) => (
+                      <PhotoCard
+                        key={photo.id}
+                        photo={photo}
+                        onPreview={setPreview}
+                        onDelete={setPhotoToDelete}
+                        canDelete={canDelete}
+                      />
+                    ))}
+                  </div>
                 </div>
               ))}
+
+              {ungrouped.length > 0 && (
+                <div>
+                  <div className="mb-3 flex items-center gap-2 border-b pb-2">
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      Sin reporte asociado
+                    </span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {ungrouped.length} foto{ungrouped.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    {ungrouped.map((photo) => (
+                      <PhotoCard
+                        key={photo.id}
+                        photo={photo}
+                        onPreview={setPreview}
+                        onDelete={setPhotoToDelete}
+                        canDelete={canDelete}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Preview modal */}
       {preview && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
@@ -321,14 +253,10 @@ export default function PhotoGallery({
             variant="ghost"
             size="icon"
             className="absolute right-4 top-4 text-white hover:bg-white/20"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPreview(null);
-            }}
+            onClick={(e) => { e.stopPropagation(); setPreview(null); }}
           >
             <X className="h-5 w-5" />
           </Button>
-
           <img
             src={getPhotoSrc(preview)}
             alt={preview.description || "Vista previa"}
@@ -340,7 +268,6 @@ export default function PhotoGallery({
 
       {photoToDelete && canDelete && (
         <DeleteConfirmModal
-          photo={photoToDelete}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setPhotoToDelete(null)}
           deleting={deleting}
