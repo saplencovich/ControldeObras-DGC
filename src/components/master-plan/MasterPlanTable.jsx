@@ -242,6 +242,39 @@ export default function MasterPlanTable({
       </CardHeader>
 
       <CardContent>
+        {displayRows.length > PAGE_SIZE && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+            <p className="text-xs text-muted-foreground">
+              Mostrando {pageRows.length} de {displayRows.length} filas del plan maestro
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-xs tabular-nums">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-3 md:hidden">
           {displayRows.length === 0 && (
             <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -656,38 +689,6 @@ export default function MasterPlanTable({
           </Table>
         </div>
 
-        {displayRows.length > PAGE_SIZE && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-            <p className="text-xs text-muted-foreground">
-              Mostrando {pageRows.length} de {displayRows.length} filas del plan maestro
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={safePage <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                Anterior
-              </Button>
-              <span className="text-xs tabular-nums">
-                {safePage} / {totalPages}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

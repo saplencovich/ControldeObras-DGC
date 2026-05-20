@@ -38,7 +38,7 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background font-inter">
       {/* Top Header */}
-      <header className="sticky top-0 z-50 bg-primary text-primary-foreground">
+      <header className="sticky top-0 z-[60] bg-primary text-primary-foreground">
         <div className="flex items-center justify-between px-4 md:px-6 h-14">
           <div className="flex items-center gap-3">
             <Button

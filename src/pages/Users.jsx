@@ -20,6 +20,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usePermissions } from '@/lib/PermissionsContext';
 import { Navigate } from 'react-router-dom';
 import { api } from '@/lib/api';
+import FilterPill from '@/components/common/FilterPill';
+import { useMemo } from 'react';
 
 const ROLES = [
   { value: 'admin', label: 'Administrador' },
@@ -57,6 +59,10 @@ export default function Users() {
   const [formError, setFormError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  const [selectedProject, setSelectedProject] = useState('all');
+  const [selectedRole, setSelectedRole] = useState('all');
+  const [selectedActivity, setSelectedActivity] = useState('all');
+
   if (!isAdmin) return <Navigate to="/" replace />;
 
   const { data: users = [], isLoading } = useQuery({
@@ -68,6 +74,44 @@ export default function Users() {
     queryKey: ['projects'],
     queryFn: () => api.get('/projects'),
   });
+
+  const { data: masterItems = [] } = useQuery({
+    queryKey: ['masterItems'],
+    queryFn: () => api.get('/master-items'),
+  });
+
+  const uniqueActivities = useMemo(() => {
+    return [...new Set(masterItems.map(item => item.activity).filter(Boolean))];
+  }, [masterItems]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      // Role filter
+      if (selectedRole !== 'all' && u.role !== selectedRole) return false;
+
+      const allowed = parseAllowedProjects(u.allowed_projects);
+
+      // Project filter
+      if (selectedProject !== 'all') {
+        if (u.role !== 'admin' && !allowed.includes(selectedProject)) return false;
+      }
+
+      // Activity filter
+      if (selectedActivity !== 'all') {
+        const projectsWithActivity = new Set(
+          masterItems.filter(item => item.activity === selectedActivity).map(item => item.project)
+        );
+        if (u.role === 'admin') {
+          if (!projectsWithActivity.size) return false;
+        } else {
+          const hasProjectWithActivity = allowed.some(proj => projectsWithActivity.has(proj));
+          if (!hasProjectWithActivity) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [users, selectedRole, selectedProject, selectedActivity, masterItems]);
 
   const createUser = useMutation({
     mutationFn: (data) => api.post('/users', data),
@@ -161,12 +205,30 @@ export default function Users() {
         </Button>
       </div>
 
+      {/* Filtros */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <FilterPill
+          label="Obra"
+          value={selectedProject}
+          options={projects.map((p) => p.name)}
+          onChange={setSelectedProject}
+        />
+
+        <FilterPill
+          label="Rol"
+          value={selectedRole}
+          options={ROLES}
+          onChange={setSelectedRole}
+        />
+
+      </div>
+
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-semibold">
             Usuarios del Sistema
             <span className="ml-2 text-sm font-normal text-muted-foreground">
-              ({users.length})
+              ({filteredUsers.length} de {users.length})
             </span>
           </CardTitle>
         </CardHeader>
@@ -186,15 +248,15 @@ export default function Users() {
               </TableHeader>
 
               <TableBody>
-                {users.length === 0 && (
+                {filteredUsers.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">
-                      Sin usuarios registrados.
+                      Sin usuarios registrados que coincidan con el filtro.
                     </TableCell>
                   </TableRow>
                 )}
 
-                {users.map((u) => {
+                {filteredUsers.map((u) => {
                   const allowed = parseAllowedProjects(u.allowed_projects);
                   return (
                     <TableRow key={u.id} className="hover:bg-muted/30 text-xs">

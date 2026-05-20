@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
+import FilterPill from '@/components/common/FilterPill';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -42,6 +43,8 @@ export default function Workers() {
 
   const [showForm, setShowForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState('all');
+  const [selectedRole, setSelectedRole] = useState('all');
+  const [selectedActivity, setSelectedActivity] = useState('all');
   const [form, setForm] = useState({ project: '', name: '', role: '' });
   const [formError, setFormError] = useState('');
 
@@ -122,10 +125,49 @@ export default function Workers() {
 
   const canSeeWorker = (w) => userRole === 'admin' || hasAccessToProject(w.project);
 
-  const filteredWorkers =
-    selectedProject === 'all'
-      ? projectWorkers.filter(canSeeWorker)
-      : projectWorkers.filter((w) => w.project === selectedProject && canSeeWorker(w));
+  const projectWorkersList = useMemo(() => {
+    return projectWorkers.filter(canSeeWorker).filter((w) => {
+      if (selectedProject !== 'all' && w.project !== selectedProject) return false;
+      return true;
+    });
+  }, [projectWorkers, selectedProject, userRole, hasAccessToProject]);
+
+  const workerRoles = useMemo(() => {
+    return [...new Set(projectWorkersList.map((w) => w.role).filter(Boolean))];
+  }, [projectWorkersList]);
+
+  const uniqueActivities = useMemo(() => {
+    const projectLogs = dailyLogs.filter(log => {
+      const matchesAccess = userRole === 'admin' || hasAccessToProject(log.project);
+      if (!matchesAccess) return false;
+      if (selectedProject !== 'all' && log.project !== selectedProject) return false;
+      return true;
+    });
+    return [...new Set(projectLogs.map(l => l.activity).filter(Boolean))];
+  }, [dailyLogs, selectedProject, userRole, hasAccessToProject]);
+
+  const workersWithActivity = useMemo(() => {
+    if (selectedActivity === 'all') return null;
+    const names = new Set();
+    dailyLogs.forEach(log => {
+      if (log.activity === selectedActivity) {
+        log.crew_workers?.forEach(w => {
+          if (w.name) names.add(w.name.trim().toLowerCase());
+        });
+      }
+    });
+    return names;
+  }, [dailyLogs, selectedActivity]);
+
+  const filteredWorkers = useMemo(() => {
+    return projectWorkersList.filter((w) => {
+      if (selectedRole !== 'all' && w.role !== selectedRole) return false;
+      if (selectedActivity !== 'all' && workersWithActivity) {
+        if (!workersWithActivity.has(w.name?.trim().toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [projectWorkersList, selectedRole, selectedActivity, workersWithActivity]);
 
   const projectNames = [...new Set(projectWorkers.map((w) => w.project).filter(Boolean))];
   const allProjects = [...new Set([...filteredProjects.map((p) => p.name), ...projectNames])];
@@ -268,18 +310,6 @@ export default function Workers() {
         </h1>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={selectedProject} onValueChange={(v) => { setSelectedProject(v); setSelectedIds(new Set()); }}>
-            <SelectTrigger className="h-8 w-44 text-xs">
-              <SelectValue placeholder="Filtrar por obra" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las obras</SelectItem>
-              {allProjects.map((p) => (
-                <SelectItem key={p} value={p}>{p}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={handleImportClick}>
             <FileSpreadsheet className="w-3 h-3" />
             Importar Excel/CSV
@@ -300,6 +330,22 @@ export default function Workers() {
             Agregar Persona
           </Button>
         </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <FilterPill
+          label="Obra"
+          value={selectedProject}
+          options={allProjects}
+          onChange={(v) => {
+            setSelectedProject(v);
+            setSelectedRole('all');
+            setSelectedActivity('all');
+            setSelectedIds(new Set());
+          }}
+        />
+
       </div>
 
       <Tabs defaultValue="roster">
