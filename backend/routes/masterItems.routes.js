@@ -2,6 +2,7 @@ const express = require("express");
 const db = require("../db/connection");
 
 const router = express.Router();
+const TOWER_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 function toNumber(value) {
   return Number(value || 0);
@@ -25,6 +26,33 @@ function safeParseArray(value) {
 
 function isBlank(value) {
   return !String(value || "").trim();
+}
+
+function getTowerOptions(towerCount) {
+  const count = Number.isInteger(Number(towerCount)) ? Number(towerCount) : 1;
+  return TOWER_LETTERS.slice(0, Math.min(Math.max(count, 1), TOWER_LETTERS.length)).map(
+    (letter) => `Torre ${letter}`
+  );
+}
+
+function validateProjectTower(projectName, tower, callback) {
+  db.get("SELECT name, tower_count FROM projects WHERE name = ?", [projectName], (err, project) => {
+    if (err) return callback(err);
+
+    if (!project) {
+      return callback(null, "La obra seleccionada no existe");
+    }
+
+    const validTowers = getTowerOptions(project.tower_count);
+    if (!validTowers.includes(tower)) {
+      return callback(
+        null,
+        `La torre seleccionada no pertenece a la obra. Debe ser una de: ${validTowers.join(", ")}`
+      );
+    }
+
+    callback(null, "");
+  });
 }
 
 function validateMasterItemPayload(payload) {
@@ -169,101 +197,106 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: validationError });
   }
 
-  const sql = `
-    INSERT INTO master_items (
-      project,
-      tower,
-      floor,
-      activity,
-      start_date,
-      end_date,
-      planned_qty,
-      executed_qty,
-      unit,
-      crew_name,
-      crew_size,
-      crew_members,
-      restrictions,
-      observations,
-      status,
-      release_status
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  validateProjectTower(project, tower, (err, towerValidationError) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (towerValidationError) return res.status(400).json({ error: towerValidationError });
 
-  const buildItem = (id, floorValue) => ({
-    id,
-    project: project || "",
-    tower: tower || "",
-    floor: floorValue,
-    activity: activity || "",
-    start_date: start_date || "",
-    end_date: end_date || "",
-    planned_qty: toNumber(planned_qty),
-    executed_qty: toNumber(executed_qty),
-    unit: unit || "",
-    crew_name: crew_name || "",
-    crew_size: toNumber(crew_size),
-    crew_members: stringifyArray(crew_members),
-    restrictions: restrictions || "",
-    observations: observations || "",
-    status: status || "pendiente",
-    release_status: release_status || "no_liberado",
-  });
+    const sql = `
+      INSERT INTO master_items (
+        project,
+        tower,
+        floor,
+        activity,
+        start_date,
+        end_date,
+        planned_qty,
+        executed_qty,
+        unit,
+        crew_name,
+        crew_size,
+        crew_members,
+        restrictions,
+        observations,
+        status,
+        release_status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-  const buildValues = (floorValue) => [
-    project || "",
-    tower || "",
-    floorValue,
-    activity || "",
-    start_date || "",
-    end_date || "",
-    toNumber(planned_qty),
-    toNumber(executed_qty),
-    unit || "",
-    crew_name || "",
-    toNumber(crew_size),
-    stringifyArray(crew_members),
-    restrictions || "",
-    observations || "",
-    status || "pendiente",
-    release_status || "no_liberado",
-  ];
+    const buildItem = (id, floorValue) => ({
+      id,
+      project: project || "",
+      tower: tower || "",
+      floor: floorValue,
+      activity: activity || "",
+      start_date: start_date || "",
+      end_date: end_date || "",
+      planned_qty: toNumber(planned_qty),
+      executed_qty: toNumber(executed_qty),
+      unit: unit || "",
+      crew_name: crew_name || "",
+      crew_size: toNumber(crew_size),
+      crew_members: stringifyArray(crew_members),
+      restrictions: restrictions || "",
+      observations: observations || "",
+      status: status || "pendiente",
+      release_status: release_status || "no_liberado",
+    });
 
-  const floorValues = getFloorValues(floor);
-  const createdItems = [];
+    const buildValues = (floorValue) => [
+      project || "",
+      tower || "",
+      floorValue,
+      activity || "",
+      start_date || "",
+      end_date || "",
+      toNumber(planned_qty),
+      toNumber(executed_qty),
+      unit || "",
+      crew_name || "",
+      toNumber(crew_size),
+      stringifyArray(crew_members),
+      restrictions || "",
+      observations || "",
+      status || "pendiente",
+      release_status || "no_liberado",
+    ];
 
-  db.serialize(() => {
-    const statement = db.prepare(sql);
+    const floorValues = getFloorValues(floor);
+    const createdItems = [];
 
-    const insertNext = (index) => {
-      if (index >= floorValues.length) {
-        statement.finalize((err) => {
-          if (err) return res.status(500).json({ error: err.message });
+    db.serialize(() => {
+      const statement = db.prepare(sql);
 
-          const firstItem = createdItems[0] || buildItem(null, "");
-          return res.status(201).json({
-            ...firstItem,
-            created_items: createdItems,
+      const insertNext = (index) => {
+        if (index >= floorValues.length) {
+          statement.finalize((err) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const firstItem = createdItems[0] || buildItem(null, "");
+            return res.status(201).json({
+              ...firstItem,
+              created_items: createdItems,
+            });
           });
-        });
-        return;
-      }
-
-      const floorValue = floorValues[index];
-
-      statement.run(buildValues(floorValue), function (err) {
-        if (err) {
-          statement.finalize(() => {});
-          return res.status(500).json({ error: err.message });
+          return;
         }
 
-        createdItems.push(buildItem(this.lastID, floorValue));
-        insertNext(index + 1);
-      });
-    };
+        const floorValue = floorValues[index];
 
-    insertNext(0);
+        statement.run(buildValues(floorValue), function (err) {
+          if (err) {
+            statement.finalize(() => {});
+            return res.status(500).json({ error: err.message });
+          }
+
+          createdItems.push(buildItem(this.lastID, floorValue));
+          insertNext(index + 1);
+        });
+      };
+
+      insertNext(0);
+    });
   });
 });
 
@@ -294,73 +327,78 @@ router.put("/:id", (req, res) => {
     return res.status(400).json({ error: validationError });
   }
 
-  const sql = `
-    UPDATE master_items
-    SET
-      project = ?,
-      tower = ?,
-      floor = ?,
-      activity = ?,
-      start_date = ?,
-      end_date = ?,
-      planned_qty = ?,
-      executed_qty = ?,
-      unit = ?,
-      crew_name = ?,
-      crew_size = ?,
-      crew_members = ?,
-      restrictions = ?,
-      observations = ?,
-      status = ?,
-      release_status = ?
-    WHERE id = ?
-  `;
-
-  const values = [
-    project || "",
-    tower || "",
-    floor || "",
-    activity || "",
-    start_date || "",
-    end_date || "",
-    toNumber(planned_qty),
-    toNumber(executed_qty),
-    unit || "",
-    crew_name || "",
-    toNumber(crew_size),
-    stringifyArray(crew_members),
-    restrictions || "",
-    observations || "",
-    status || "pendiente",
-    release_status || "no_liberado",
-    id,
-  ];
-
-  db.run(sql, values, function (err) {
+  validateProjectTower(project, tower, (err, towerValidationError) => {
     if (err) return res.status(500).json({ error: err.message });
+    if (towerValidationError) return res.status(400).json({ error: towerValidationError });
 
-    if (this.changes === 0) {
-      return res.status(404).json({ error: "Ítem no encontrado" });
-    }
+    const sql = `
+      UPDATE master_items
+      SET
+        project = ?,
+        tower = ?,
+        floor = ?,
+        activity = ?,
+        start_date = ?,
+        end_date = ?,
+        planned_qty = ?,
+        executed_qty = ?,
+        unit = ?,
+        crew_name = ?,
+        crew_size = ?,
+        crew_members = ?,
+        restrictions = ?,
+        observations = ?,
+        status = ?,
+        release_status = ?
+      WHERE id = ?
+    `;
 
-    res.json({
-      id: Number(id),
-      project: project || "",
-      tower: tower || "",
-      floor: floor || "",
-      activity: activity || "",
-      start_date: start_date || "",
-      end_date: end_date || "",
-      planned_qty: toNumber(planned_qty),
-      executed_qty: toNumber(executed_qty),
-      unit: unit || "",
-      crew_name: crew_name || "",
-      crew_size: toNumber(crew_size),
-      crew_members: stringifyArray(crew_members),
-      restrictions: restrictions || "",
-      observations: observations || "",
-      status: status || "pendiente",
-      release_status: release_status || "no_liberado",
+    const values = [
+      project || "",
+      tower || "",
+      floor || "",
+      activity || "",
+      start_date || "",
+      end_date || "",
+      toNumber(planned_qty),
+      toNumber(executed_qty),
+      unit || "",
+      crew_name || "",
+      toNumber(crew_size),
+      stringifyArray(crew_members),
+      restrictions || "",
+      observations || "",
+      status || "pendiente",
+      release_status || "no_liberado",
+      id,
+    ];
+
+    db.run(sql, values, function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+
+      if (this.changes === 0) {
+        return res.status(404).json({ error: "Item no encontrado" });
+      }
+
+      res.json({
+        id: Number(id),
+        project: project || "",
+        tower: tower || "",
+        floor: floor || "",
+        activity: activity || "",
+        start_date: start_date || "",
+        end_date: end_date || "",
+        planned_qty: toNumber(planned_qty),
+        executed_qty: toNumber(executed_qty),
+        unit: unit || "",
+        crew_name: crew_name || "",
+        crew_size: toNumber(crew_size),
+        crew_members: stringifyArray(crew_members),
+        restrictions: restrictions || "",
+        observations: observations || "",
+        status: status || "pendiente",
+        release_status: release_status || "no_liberado",
+      });
     });
   });
 });

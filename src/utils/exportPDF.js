@@ -584,30 +584,7 @@ export async function exportReportPDF(
     }
   }
 
-  // ── Cierre ─────────────────────────────────────────────────────────────────
-  if (y + 20 > PAGE_H - 12) { doc.addPage(); y = addPageHeader(doc, today, logoData); }
-  y += 6;
-  doc.setDrawColor(210, 218, 235); doc.setLineWidth(0.3); doc.line(M, y, M + CW, y);
-  y += 5;
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(80, 90, 110);
-  doc.text('Leyenda:', M, y);
-  const legends = [
-    { color: [34, 150, 60], label: 'Completado / ≥80%' },
-    { color: [210, 130, 0], label: 'En seguimiento / 50–79%' },
-    { color: [200, 50, 50], label: 'Bajo meta / <50%' },
-  ];
-  let lx = M + 22;
-  legends.forEach(l => {
-    doc.setFillColor(...l.color); doc.rect(lx, y - 3, 3, 3, 'F');
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(80, 90, 110);
-    doc.text(l.label, lx + 4.5, y);
-    lx += 52;
-  });
-
-  y += 8;
-  doc.setFont('helvetica', 'italic'); doc.setFontSize(6.5); doc.setTextColor(150, 150, 150);
-  doc.text(`Documento generado automáticamente · ${format(new Date(), "dd/MM/yyyy HH:mm")}`, PAGE_W / 2, y, { align: 'center' });
+ 
 
   doc.save(`informe_avance_${todayShort}.pdf`);
 }

@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X, ClipboardList } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { usePermissions } from "@/lib/PermissionsContext";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -65,6 +65,7 @@ const FLOOR_OPTIONS = [
 ];
 
 const EMPTY_MEMBER = { name: "", role: "" };
+const TOWER_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 const INITIAL_FORM = {
   project: "",
@@ -121,6 +122,13 @@ function getCrewMembersFromEditItem(editItem) {
   }
 }
 
+function getTowerOptions(towerCount) {
+  const count = Number.isInteger(Number(towerCount)) ? Number(towerCount) : 1;
+  return TOWER_LETTERS.slice(0, Math.min(Math.max(count, 1), TOWER_LETTERS.length)).map(
+    (letter) => `Torre ${letter}`
+  );
+}
+
 export default function MasterItemForm({
   open,
   onClose,
@@ -136,11 +144,13 @@ export default function MasterItemForm({
     queryFn: () => api.get("/master-items"),
   });
 
-  // Modo local para no bloquear proyectos por permisos mientras desarrollas.
-  const isLocalMode = true;
+  const { data: projectWorkers = [] } = useQuery({
+    queryKey: ["projectWorkers"],
+    queryFn: () => api.get("/project-workers"),
+  });
 
   const filteredProjects =
-    isLocalMode || userRole === "admin"
+    userRole === "admin"
       ? projects
       : projects.filter((project) => hasAccessToProject(project.name));
 
@@ -148,6 +158,10 @@ export default function MasterItemForm({
   const [crewMembers, setCrewMembers] = useState([{ ...EMPTY_MEMBER }]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const currentProjectWorkers = projectWorkers.filter(
+    (w) => w.project === form.project
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -182,11 +196,36 @@ export default function MasterItemForm({
     if (error) setError("");
   };
 
+  const selectedProjectObj = projects.find((p) => p.name === form.project);
+  const towerOptions = getTowerOptions(selectedProjectObj?.tower_count);
+  const isTowerValid = !form.tower || towerOptions.includes(form.tower);
+
+  const handleProjectChange = (value) => {
+    const nextProject = projects.find((project) => project.name === value);
+    const nextTowerOptions = getTowerOptions(nextProject?.tower_count);
+
+    setForm((prev) => ({
+      ...prev,
+      project: value,
+      tower: nextTowerOptions.includes(prev.tower) ? prev.tower : "",
+    }));
+
+    if (error) setError("");
+  };
+
   const updateMember = (index, field, value) => {
     setCrewMembers((prev) =>
-      prev.map((member, i) =>
-        i === index ? { ...member, [field]: value } : member
-      )
+      prev.map((member, i) => {
+        if (i !== index) return member;
+        const updated = { ...member, [field]: value };
+        if (field === "name") {
+          const worker = currentProjectWorkers.find((w) => w.name === value);
+          if (worker) {
+            updated.role = worker.role || "";
+          }
+        }
+        return updated;
+      })
     );
   };
 
@@ -207,7 +246,11 @@ export default function MasterItemForm({
     }
 
     if (!form.tower.trim()) {
-      return "Debe ingresar una torre.";
+      return "Debe seleccionar una torre.";
+    }
+
+    if (!isTowerValid) {
+      return "Debe seleccionar una torre valida para la obra.";
     }
 
     if (!form.floors || form.floors.length === 0) {
@@ -337,6 +380,7 @@ export default function MasterItemForm({
   const isFormInvalid =
     !form.project ||
     !form.tower.trim() ||
+    !isTowerValid ||
     !form.floors ||
     form.floors.length === 0 ||
     !form.activity.trim() ||
@@ -363,22 +407,6 @@ export default function MasterItemForm({
   const uniqueCrewNames = Array.from(
     new Set(allItems.map((i) => i.crew_name))
   ).filter(Boolean);
-
-  const uniqueMemberNames = Array.from(
-    new Set(
-      allItems.flatMap((i) => {
-        try {
-          const members = JSON.parse(i.crew_members);
-          return Array.isArray(members) ? members.map((m) => m.name) : [];
-        } catch {
-          return [];
-        }
-      })
-    )
-  ).filter(Boolean);
-
-  const selectedProjectObj = projects.find((p) => p.name === form.project);
-  const availableFloors = selectedProjectObj?.floors || [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -408,7 +436,7 @@ export default function MasterItemForm({
               <Label className="text-xs">Proyecto *</Label>
               <Select
                 value={form.project}
-                onValueChange={(value) => updateFormField("project", value)}
+                onValueChange={handleProjectChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar" />
@@ -448,11 +476,27 @@ export default function MasterItemForm({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Torre</Label>
-              <Input
+              <Select
                 value={form.tower}
-                onChange={(e) => updateFormField("tower", e.target.value)}
-                placeholder="Ej: Torre A, Bloque 1..."
-              />
+                onValueChange={(value) => updateFormField("tower", value)}
+                disabled={!form.project}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.project ? "Seleccionar torre" : "Seleccione obra"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {form.tower && !isTowerValid && (
+                    <SelectItem value={form.tower} disabled>
+                      {form.tower} (fuera del rango actual)
+                    </SelectItem>
+                  )}
+                  {towerOptions.map((tower) => (
+                    <SelectItem key={tower} value={tower}>
+                      {tower}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
@@ -546,23 +590,38 @@ export default function MasterItemForm({
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
               {crewMembers.map((member, index) => (
                 <div key={index} className="flex items-center gap-2">
-                  <AutocompleteInput
+                  <Select
                     value={member.name}
-                    onChange={(e) =>
-                      updateMember(index, "name", e.target.value)
-                    }
-                    options={uniqueMemberNames}
-                    placeholder="Nombre"
-                    className="h-8 flex-1 text-xs"
-                  />
+                    onValueChange={(val) => updateMember(index, "name", val)}
+                  >
+                    <SelectTrigger className="h-8 flex-1 text-xs">
+                      <SelectValue placeholder="Seleccionar integrante..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {member.name && !currentProjectWorkers.some(w => w.name === member.name) && (
+                        <SelectItem key={member.name} value={member.name}>
+                          {member.name}
+                        </SelectItem>
+                      )}
+                      {currentProjectWorkers.length === 0 ? (
+                        <SelectItem value="__none_w__" disabled className="text-xs">
+                          Sin personal registrado
+                        </SelectItem>
+                      ) : (
+                        currentProjectWorkers.map((w) => (
+                          <SelectItem key={w.id} value={w.name} className="text-xs">
+                            {w.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
 
                   <Input
                     value={member.role}
-                    onChange={(e) =>
-                      updateMember(index, "role", e.target.value)
-                    }
-                    placeholder="Cargo"
-                    className="h-8 w-32 text-xs"
+                    readOnly
+                    placeholder="Cargo (Automático)"
+                    className="h-8 w-32 text-xs bg-muted/50 text-muted-foreground select-none"
                   />
 
                   <Button
@@ -651,17 +710,6 @@ export default function MasterItemForm({
             {saving ? "Guardando..." : editItem ? "Actualizar" : "Crear Ítem"}
           </Button>
 
-          {!editItem && onSaveAndLog && (
-            <Button
-              variant="default"
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleSaveAndLog}
-              disabled={isFormInvalid}
-            >
-              <ClipboardList className="h-4 w-4" />
-              {saving ? "Guardando..." : "Crear y agregar reporte"}
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

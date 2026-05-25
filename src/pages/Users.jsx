@@ -206,7 +206,7 @@ export default function Users() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-wrap gap-2 items-center">
         <FilterPill
           label="Obra"
           value={selectedProject}
@@ -220,7 +220,6 @@ export default function Users() {
           options={ROLES}
           onChange={setSelectedRole}
         />
-
       </div>
 
       <Card className="border-0 shadow-sm">

@@ -23,6 +23,7 @@ dist-ssr
 *.local
 .vite
 
+
 # Backend local database
 backend/database.sqlite
 backend/*.sqlite

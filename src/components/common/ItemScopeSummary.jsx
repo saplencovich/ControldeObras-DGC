@@ -40,14 +40,7 @@ export default function ItemScopeSummary({ item, className, hideActivity = false
           <span className="truncate">{floorSummary.label}</span>
         </Badge>
 
-        {floorSummary.count > 0 && (
-          <Badge
-            variant="outline"
-            className="bg-background text-[11px] text-muted-foreground"
-          >
-            {floorSummary.count} {floorSummary.count === 1 ? "piso" : "pisos"}
-          </Badge>
-        )}
+        {/* Removed badge showing total number of floors as requested */}
 
         {hasManyFloors && (
           <Popover>

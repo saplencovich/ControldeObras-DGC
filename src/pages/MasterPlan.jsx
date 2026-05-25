@@ -5,10 +5,10 @@ import { usePermissions } from '@/lib/PermissionsContext';
 import { api } from '@/lib/api';
 
 import MasterPlanTable from '../components/master-plan/MasterPlanTable';
-import MasterItemForm from '../components/forms/MasterItemForm';
-import DailyLogForm from '../components/forms/DailyLogForm';
+import MasterItemForm from '../components/detail/forms/MasterItemForm';
+import DailyLogForm from '../components/detail/forms/DailyLogForm';
 import FilterBar from '../components/dashboard/FilterBar';
-import ProjectForm from '../components/forms/ProjectForm';
+import ProjectForm from '../components/detail/forms/ProjectForm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';

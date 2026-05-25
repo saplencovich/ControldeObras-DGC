@@ -142,7 +142,7 @@ export default function DailyLogForm({
 
   const { data: allWorkers = [] } = useQuery({
     queryKey: ["allWorkersForAutocomplete"],
-    queryFn: () => api.get("/workers"),
+    queryFn: () => api.get("/project-workers"),
     staleTime: 1000 * 60 * 5,
     enabled: open,
   });
@@ -159,8 +159,14 @@ export default function DailyLogForm({
     enabled: open,
   });
 
-  const logWorkers = allLogs.flatMap((log) => log.crew_workers || []);
-  const allWorkerData = [...allWorkers, ...logWorkers];
+  const currentProjectWorkers = allWorkers.filter(
+    (w) => w.project === masterItem?.project
+  );
+
+  const logWorkers = allLogs
+    .filter((log) => log.project === masterItem?.project)
+    .flatMap((log) => log.crew_workers || []);
+  const allWorkerData = [...currentProjectWorkers, ...logWorkers];
 
   const uniqueWorkerNames = Array.from(
     new Set(allWorkerData.map((worker) => worker.name).filter(Boolean))
@@ -228,9 +234,19 @@ export default function DailyLogForm({
 
   const updateWorker = (index, field, value) => {
     setWorkers((prev) =>
-      prev.map((worker, idx) =>
-        idx === index ? { ...worker, [field]: value } : worker
-      )
+      prev.map((worker, idx) => {
+        if (idx !== index) return worker;
+        const updated = { ...worker, [field]: value };
+        if (field === "name") {
+          const projectWorker = allWorkers.find(
+            (w) => w.project === masterItem?.project && w.name === value
+          );
+          if (projectWorker) {
+            updated.role = projectWorker.role || "";
+          }
+        }
+        return updated;
+      })
     );
   };
 

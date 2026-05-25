@@ -2,6 +2,8 @@ const express = require("express");
 const db = require("../db/connection");
 
 const router = express.Router();
+const MIN_TOWER_COUNT = 1;
+const MAX_TOWER_COUNT = 10;
 
 function normalizeStatus(status) {
   if (!status) return "activa";
@@ -20,6 +22,16 @@ function isBlank(value) {
   return !String(value || "").trim();
 }
 
+function normalizeTowerCount(value) {
+  const towerCount = Number(value);
+
+  if (!Number.isInteger(towerCount) || towerCount < MIN_TOWER_COUNT || towerCount > MAX_TOWER_COUNT) {
+    return null;
+  }
+
+  return towerCount;
+}
+
 function findProjectByName(name, excludeId, callback) {
   const normalizedName = normalizeProjectName(name);
 
@@ -33,6 +45,219 @@ function findProjectByName(name, excludeId, callback) {
     );
 
     callback(null, match);
+  });
+}
+
+// Helper to add a project name to a user's allowed_projects by full_name
+function addProjectToUser(fullName, projectName, callback) {
+  if (!fullName) {
+    if (callback) callback();
+    return;
+  }
+  db.get(
+    "SELECT id, allowed_projects FROM users WHERE LOWER(TRIM(full_name)) = LOWER(TRIM(?))",
+    [fullName],
+    (err, user) => {
+      if (err || !user) {
+        if (callback) callback(err);
+        return;
+      }
+      let allowed = [];
+      try {
+        allowed = JSON.parse(user.allowed_projects || "[]");
+      } catch (e) {
+        allowed = [];
+      }
+      if (!Array.isArray(allowed)) {
+        allowed = [];
+      }
+      if (!allowed.includes(projectName)) {
+        allowed.push(projectName);
+        db.run(
+          "UPDATE users SET allowed_projects = ? WHERE id = ?",
+          [JSON.stringify(allowed), user.id],
+          (err) => {
+            if (callback) callback(err);
+          }
+        );
+      } else {
+        if (callback) callback();
+      }
+    }
+  );
+}
+
+// Helper to remove a project name from a user's allowed_projects by full_name
+function removeProjectFromUser(fullName, projectName, callback) {
+  if (!fullName) {
+    if (callback) callback();
+    return;
+  }
+  db.get(
+    "SELECT id, allowed_projects FROM users WHERE LOWER(TRIM(full_name)) = LOWER(TRIM(?))",
+    [fullName],
+    (err, user) => {
+      if (err || !user) {
+        if (callback) callback(err);
+        return;
+      }
+      let allowed = [];
+      try {
+        allowed = JSON.parse(user.allowed_projects || "[]");
+      } catch (e) {
+        allowed = [];
+      }
+      if (!Array.isArray(allowed)) {
+        allowed = [];
+      }
+      if (allowed.includes(projectName)) {
+        allowed = allowed.filter(p => p !== projectName);
+        db.run(
+          "UPDATE users SET allowed_projects = ? WHERE id = ?",
+          [JSON.stringify(allowed), user.id],
+          (err) => {
+            if (callback) callback(err);
+          }
+        );
+      } else {
+        if (callback) callback();
+      }
+    }
+  );
+}
+
+// Helper to rename a project name in allowed_projects of all users
+function renameProjectInAllowedProjects(oldName, newName, callback) {
+  db.all("SELECT id, allowed_projects FROM users", [], (err, users) => {
+    if (err || !users) {
+      if (callback) callback(err);
+      return;
+    }
+    let pending = users.length;
+    if (pending === 0) {
+      if (callback) callback();
+      return;
+    }
+    let errorOccurred = null;
+    users.forEach((user) => {
+      let allowed = [];
+      try {
+        allowed = JSON.parse(user.allowed_projects || "[]");
+      } catch (e) {
+        allowed = [];
+      }
+      if (!Array.isArray(allowed)) {
+        allowed = [];
+      }
+      if (allowed.includes(oldName)) {
+        allowed = allowed.map(p => p === oldName ? newName : p);
+        db.run(
+          "UPDATE users SET allowed_projects = ? WHERE id = ?",
+          [JSON.stringify(allowed), user.id],
+          (err) => {
+            if (err) errorOccurred = err;
+            pending--;
+            if (pending === 0) {
+              if (callback) callback(errorOccurred);
+            }
+          }
+        );
+      } else {
+        pending--;
+        if (pending === 0) {
+          if (callback) callback(errorOccurred);
+        }
+      }
+    });
+  });
+}
+
+// Helper to remove a project name from allowed_projects of all users
+function removeProjectFromAllowedProjects(projectName, callback) {
+  db.all("SELECT id, allowed_projects FROM users", [], (err, users) => {
+    if (err || !users) {
+      if (callback) callback(err);
+      return;
+    }
+    let pending = users.length;
+    if (pending === 0) {
+      if (callback) callback();
+      return;
+    }
+    let errorOccurred = null;
+    users.forEach((user) => {
+      let allowed = [];
+      try {
+        allowed = JSON.parse(user.allowed_projects || "[]");
+      } catch (e) {
+        allowed = [];
+      }
+      if (!Array.isArray(allowed)) {
+        allowed = [];
+      }
+      if (allowed.includes(projectName)) {
+        allowed = allowed.filter(p => p !== projectName);
+        db.run(
+          "UPDATE users SET allowed_projects = ? WHERE id = ?",
+          [JSON.stringify(allowed), user.id],
+          (err) => {
+            if (err) errorOccurred = err;
+            pending--;
+            if (pending === 0) {
+              if (callback) callback(errorOccurred);
+            }
+          }
+        );
+      } else {
+        pending--;
+        if (pending === 0) {
+          if (callback) callback(errorOccurred);
+        }
+      }
+    });
+  });
+}
+
+// Helper to handle all updates when a project is edited
+function handleProjectUpdate(currentProject, newName, newSupervisor, newCapataz, callback) {
+  const oldName = currentProject.name;
+  const oldSupervisor = currentProject.supervisor;
+  const oldCapataz = currentProject.capataz;
+
+  const nameChanged = oldName !== newName;
+
+  const step1 = (next) => {
+    if (nameChanged) {
+      renameProjectInAllowedProjects(oldName, newName, next);
+    } else {
+      next();
+    }
+  };
+
+  step1((err) => {
+    if (err) return callback(err);
+
+    const handleSupervisor = (next) => {
+      if (oldSupervisor !== newSupervisor) {
+        removeProjectFromUser(oldSupervisor, newName, (err) => {
+          addProjectToUser(newSupervisor, newName, next);
+        });
+      } else {
+        addProjectToUser(newSupervisor, newName, next);
+      }
+    };
+
+    handleSupervisor((err) => {
+      if (err) return callback(err);
+
+      if (oldCapataz !== newCapataz) {
+        removeProjectFromUser(oldCapataz, newName, (err) => {
+          addProjectToUser(newCapataz, newName, callback);
+        });
+      } else {
+        addProjectToUser(newCapataz, newName, callback);
+      }
+    });
   });
 }
 
@@ -70,6 +295,7 @@ router.post("/", (req, res) => {
     end_date,
     supervisor,
     capataz,
+    tower_count,
   } = req.body;
 
   const projectName = name?.trim();
@@ -94,6 +320,11 @@ router.post("/", (req, res) => {
   const missingField = requiredFields.find(([value]) => isBlank(value));
   if (missingField) {
     return res.status(400).json({ error: missingField[1] });
+  }
+
+  const towerCount = normalizeTowerCount(tower_count);
+  if (!towerCount) {
+    return res.status(400).json({ error: "La cantidad de torres debe ser un numero entre 1 y 10" });
   }
 
   findProjectByName(projectName, null, (err, existingProject) => {
@@ -115,9 +346,10 @@ router.post("/", (req, res) => {
         start_date,
         end_date,
         supervisor,
-        capataz
+        capataz,
+        tower_count
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.run(
@@ -132,21 +364,27 @@ router.post("/", (req, res) => {
         end_date || "",
         supervisor || "",
         capataz || "",
+        towerCount,
       ],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
 
-        res.status(201).json({
-          id: this.lastID,
-          name: projectName,
-          client: client || "",
-          address: projectAddress,
-          description: description || "",
-          status: normalizeStatus(status),
-          start_date: start_date || "",
-          end_date: end_date || "",
-          supervisor: supervisor || "",
-          capataz: capataz || "",
+        addProjectToUser(supervisor, projectName, (err1) => {
+          addProjectToUser(capataz, projectName, (err2) => {
+            res.status(201).json({
+              id: this.lastID,
+              name: projectName,
+              client: client || "",
+              address: projectAddress,
+              description: description || "",
+              status: normalizeStatus(status),
+              start_date: start_date || "",
+              end_date: end_date || "",
+              supervisor: supervisor || "",
+              capataz: capataz || "",
+              tower_count: towerCount,
+            });
+          });
         });
       }
     );
@@ -167,6 +405,7 @@ router.put("/:id", (req, res) => {
     end_date,
     supervisor,
     capataz,
+    tower_count,
   } = req.body;
 
   const projectName = name?.trim();
@@ -191,6 +430,11 @@ router.put("/:id", (req, res) => {
   const missingField = requiredFields.find(([value]) => isBlank(value));
   if (missingField) {
     return res.status(400).json({ error: missingField[1] });
+  }
+
+  const towerCount = normalizeTowerCount(tower_count);
+  if (!towerCount) {
+    return res.status(400).json({ error: "La cantidad de torres debe ser un numero entre 1 y 10" });
   }
 
   findProjectByName(projectName, id, (err, existingProject) => {
@@ -220,7 +464,8 @@ router.put("/:id", (req, res) => {
           start_date = ?,
           end_date = ?,
           supervisor = ?,
-          capataz = ?
+          capataz = ?,
+          tower_count = ?
         WHERE id = ?
       `;
 
@@ -237,6 +482,7 @@ router.put("/:id", (req, res) => {
             end_date || "",
             supervisor || "",
             capataz || "",
+            towerCount,
             id,
           ],
           function (err) {
@@ -258,17 +504,22 @@ router.put("/:id", (req, res) => {
                   (err) => {
                     if (err) return res.status(500).json({ error: err.message });
 
-                    res.json({
-                      id: Number(id),
-                      name: projectName,
-                      client: client || "",
-                      address: projectAddress,
-                      description: description || "",
-                      status: normalizeStatus(status),
-                      start_date: start_date || "",
-                      end_date: end_date || "",
-                      supervisor: supervisor || "",
-                      capataz: capataz || "",
+                    handleProjectUpdate(currentProject, projectName, supervisor || "", capataz || "", (errUpdate) => {
+                      if (errUpdate) console.error("Error updating allowed_projects:", errUpdate);
+
+                      res.json({
+                        id: Number(id),
+                        name: projectName,
+                        client: client || "",
+                        address: projectAddress,
+                        description: description || "",
+                        status: normalizeStatus(status),
+                        start_date: start_date || "",
+                        end_date: end_date || "",
+                        supervisor: supervisor || "",
+                        capataz: capataz || "",
+                        tower_count: towerCount,
+                      });
                     });
                   }
                 );
@@ -322,10 +573,14 @@ router.delete("/:id", (req, res) => {
           db.run("DELETE FROM projects WHERE id = ?", [id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
 
-            res.json({
-              message: "Obra eliminada correctamente",
-              deleted_project: project.name,
-              deleted_items: itemIds.length,
+            removeProjectFromAllowedProjects(project.name, (errRemove) => {
+              if (errRemove) console.error("Error removing project from allowed_projects:", errRemove);
+
+              res.json({
+                message: "Obra eliminada correctamente",
+                deleted_project: project.name,
+                deleted_items: itemIds.length,
+              });
             });
           });
         }

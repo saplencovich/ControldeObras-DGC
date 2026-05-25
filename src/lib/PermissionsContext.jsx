@@ -30,7 +30,7 @@ export function PermissionsProvider({ children }) {
       isSupervisor,
       isViewer,
       canEditUsers: isAdmin,
-      canCreateProjects: isAdmin || isSupervisor,
+      canCreateProjects: isAdmin,
       canCreateItems: isAdmin || isSupervisor || isViewer,
       canCreateReports: isAdmin || isSupervisor || isViewer,
       canDelete: isAdmin,

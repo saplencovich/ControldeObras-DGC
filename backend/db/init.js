@@ -16,9 +16,22 @@ function initDatabase() {
         end_date TEXT DEFAULT '',
         supervisor TEXT DEFAULT '',
         capataz TEXT DEFAULT '',
+        tower_count INTEGER DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    db.all("PRAGMA table_info(projects)", [], (err, columns) => {
+      if (err) {
+        console.error("Error revisando columnas de projects:", err.message);
+        return;
+      }
+
+      const hasTowerCount = columns.some((column) => column.name === "tower_count");
+      if (!hasTowerCount) {
+        db.run("ALTER TABLE projects ADD COLUMN tower_count INTEGER DEFAULT 1");
+      }
+    });
 
     db.run(`
       CREATE TABLE IF NOT EXISTS master_items (

@@ -205,7 +205,7 @@ export default function ProductivityAnalytics() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="flex flex-wrap gap-2 items-center">
         <FilterPill
           label="Obra"
           value={selectedProject}
@@ -218,6 +218,13 @@ export default function ProductivityAnalytics() {
           value={selectedCrew}
           options={crewNames}
           onChange={setSelectedCrew}
+        />
+
+        <FilterPill
+          label="Actividad"
+          value={selectedActivity}
+          options={uniqueActivities}
+          onChange={setSelectedActivity}
         />
       </div>
 

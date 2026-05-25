@@ -14,10 +14,24 @@ export function AuthProvider({ children }) {
     const savedUser = window.localStorage.getItem(STORAGE_KEY);
 
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+      const parsed = JSON.parse(savedUser);
+      setUser(parsed);
 
-    setIsLoadingAuth(false);
+      fetch(`${API_URL}/auth/me`, {
+        headers: { 'x-user-email': parsed.email },
+      })
+        .then((res) => res.json())
+        .then((freshUser) => {
+          if (freshUser?.id) {
+            setUser(freshUser);
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(freshUser));
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingAuth(false));
+    } else {
+      setIsLoadingAuth(false);
+    }
   }, []);
 
   const login = async ({ email, password }) => {

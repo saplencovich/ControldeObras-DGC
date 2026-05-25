@@ -13,7 +13,7 @@ import ItemInfo from '../components/detail/ItemInfo';
 import DailyLogTable from '../components/detail/DailyLogTable';
 import WorkerProductivity from '../components/detail/WorkerProductivity';
 import PhotoGallery from '../components/detail/PhotoGallery';
-import DailyLogForm from '../components/forms/DailyLogForm';
+import DailyLogForm from '../components/detail/forms/DailyLogForm';
 import ItemScopeSummary from '../components/common/ItemScopeSummary';
 
 function ItemDetailSkeleton() {

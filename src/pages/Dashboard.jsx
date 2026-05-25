@@ -10,9 +10,9 @@ import CrewProductivity from "../components/dashboard/CrewProductivity";
 import FloorProgress from "../components/dashboard/FloorProgress";
 import FilterBar from "../components/dashboard/FilterBar";
 import MasterPlanTable from "../components/master-plan/MasterPlanTable";
-import ProjectForm from "../components/forms/ProjectForm";
-import MasterItemForm from "../components/forms/MasterItemForm";
-import DailyLogForm from "../components/forms/DailyLogForm";
+import ProjectForm from "../components/detail/forms/ProjectForm";
+import MasterItemForm from "../components/detail/forms/MasterItemForm";
+import DailyLogForm from "../components/detail/forms/DailyLogForm";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
@@ -60,7 +60,7 @@ export default function Dashboard() {
   const { hasAccessToProject, userRole } = usePermissions();
   const queryClient = useQueryClient();
 
-  const isLocalMode = true;
+
 
   const [filters, setFilters] = useState({
     project: "",
@@ -108,12 +108,12 @@ export default function Dashboard() {
   });
 
   const filteredProjects =
-    isLocalMode || userRole === "admin"
+    userRole === "admin"
       ? projects
       : projects.filter((project) => hasAccessToProject(project.name));
 
   const filteredMasterItems =
-    isLocalMode || userRole === "admin"
+    userRole === "admin"
       ? masterItems
       : masterItems.filter((item) => hasAccessToProject(item.project));
 
@@ -442,7 +442,7 @@ export default function Dashboard() {
     return <DashboardSkeleton />;
   }
 
-  if (!isLocalMode && userRole !== "admin" && filteredProjects.length === 0) {
+  if (userRole !== "admin" && filteredProjects.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Card className="max-w-md">
@@ -472,7 +472,7 @@ export default function Dashboard() {
         setFilters={setFilters}
         projects={filteredProjects}
         masterItems={filteredItems}
-        filterOptionItems={masterItems}
+        filterOptionItems={filteredMasterItems}
         dailyLogs={filteredLogs}
         sitePhotos={sitePhotos}
         pdfMasterItems={masterItems}
