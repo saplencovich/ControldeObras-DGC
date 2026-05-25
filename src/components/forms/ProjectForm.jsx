@@ -32,6 +32,7 @@ const INITIAL_FORM = {
   status: "activa",
   start_date: "",
   end_date: "",
+  tower_count: "1",
 };
 
 function normalizeProjectName(name) {
@@ -84,6 +85,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
         status: editProject.status || "activa",
         start_date: editProject.start_date || "",
         end_date: editProject.end_date || "",
+        tower_count: String(editProject.tower_count || 1),
       });
     } else {
       setForm({ ...INITIAL_FORM });
@@ -112,6 +114,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
       ["start_date", "La fecha de inicio es obligatoria."],
       ["end_date", "La fecha de termino es obligatoria."],
       ["description", "La descripcion es obligatoria."],
+      ["tower_count", "La cantidad de torres es obligatoria."],
     ];
     const duplicateProject = projects.find(
       (project) =>
@@ -135,6 +138,12 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
       return;
     }
 
+    const towerCount = Number(form.tower_count);
+    if (!Number.isInteger(towerCount) || towerCount < 1 || towerCount > 10) {
+      setError("La cantidad de torres debe ser un numero entre 1 y 10.");
+      return;
+    }
+
     try {
       setSaving(true);
       setError("");
@@ -148,6 +157,7 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
         capataz: form.capataz,
         description: form.description.trim(),
         status: form.status || "activa",
+        tower_count: towerCount,
       };
 
       await onSave(payload);
@@ -223,9 +233,14 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
     form.start_date,
     form.end_date,
     form.description,
+    form.tower_count,
   ];
+  const towerCount = Number(form.tower_count);
   const isFormInvalid =
     requiredProjectFields.some((value) => !String(value || "").trim()) ||
+    !Number.isInteger(towerCount) ||
+    towerCount < 1 ||
+    towerCount > 10 ||
     Boolean(duplicateProject) ||
     saving;
 
@@ -273,6 +288,19 @@ export default function ProjectForm({ open, onClose, onSave, onDelete, editProje
               value={form.client}
               onChange={(e) => updateFormField("client", e.target.value)}
               placeholder="Ej: Constructora Demo"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs">Cantidad de torres *</Label>
+            <Input
+              type="number"
+              min="1"
+              max="10"
+              step="1"
+              value={form.tower_count}
+              onChange={(e) => updateFormField("tower_count", e.target.value)}
+              placeholder="1 a 10"
             />
           </div>
 

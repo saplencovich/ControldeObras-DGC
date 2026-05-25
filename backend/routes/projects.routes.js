@@ -2,6 +2,8 @@ const express = require("express");
 const db = require("../db/connection");
 
 const router = express.Router();
+const MIN_TOWER_COUNT = 1;
+const MAX_TOWER_COUNT = 10;
 
 function normalizeStatus(status) {
   if (!status) return "activa";
@@ -18,6 +20,16 @@ function normalizeProjectName(name) {
 
 function isBlank(value) {
   return !String(value || "").trim();
+}
+
+function normalizeTowerCount(value) {
+  const towerCount = Number(value);
+
+  if (!Number.isInteger(towerCount) || towerCount < MIN_TOWER_COUNT || towerCount > MAX_TOWER_COUNT) {
+    return null;
+  }
+
+  return towerCount;
 }
 
 function findProjectByName(name, excludeId, callback) {
@@ -283,6 +295,7 @@ router.post("/", (req, res) => {
     end_date,
     supervisor,
     capataz,
+    tower_count,
   } = req.body;
 
   const projectName = name?.trim();
@@ -309,6 +322,11 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: missingField[1] });
   }
 
+  const towerCount = normalizeTowerCount(tower_count);
+  if (!towerCount) {
+    return res.status(400).json({ error: "La cantidad de torres debe ser un numero entre 1 y 10" });
+  }
+
   findProjectByName(projectName, null, (err, existingProject) => {
     if (err) return res.status(500).json({ error: err.message });
 
@@ -328,9 +346,10 @@ router.post("/", (req, res) => {
         start_date,
         end_date,
         supervisor,
-        capataz
+        capataz,
+        tower_count
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     db.run(
@@ -345,6 +364,7 @@ router.post("/", (req, res) => {
         end_date || "",
         supervisor || "",
         capataz || "",
+        towerCount,
       ],
       function (err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -362,6 +382,7 @@ router.post("/", (req, res) => {
               end_date: end_date || "",
               supervisor: supervisor || "",
               capataz: capataz || "",
+              tower_count: towerCount,
             });
           });
         });
@@ -384,6 +405,7 @@ router.put("/:id", (req, res) => {
     end_date,
     supervisor,
     capataz,
+    tower_count,
   } = req.body;
 
   const projectName = name?.trim();
@@ -408,6 +430,11 @@ router.put("/:id", (req, res) => {
   const missingField = requiredFields.find(([value]) => isBlank(value));
   if (missingField) {
     return res.status(400).json({ error: missingField[1] });
+  }
+
+  const towerCount = normalizeTowerCount(tower_count);
+  if (!towerCount) {
+    return res.status(400).json({ error: "La cantidad de torres debe ser un numero entre 1 y 10" });
   }
 
   findProjectByName(projectName, id, (err, existingProject) => {
@@ -437,7 +464,8 @@ router.put("/:id", (req, res) => {
           start_date = ?,
           end_date = ?,
           supervisor = ?,
-          capataz = ?
+          capataz = ?,
+          tower_count = ?
         WHERE id = ?
       `;
 
@@ -454,6 +482,7 @@ router.put("/:id", (req, res) => {
             end_date || "",
             supervisor || "",
             capataz || "",
+            towerCount,
             id,
           ],
           function (err) {
@@ -489,6 +518,7 @@ router.put("/:id", (req, res) => {
                         end_date: end_date || "",
                         supervisor: supervisor || "",
                         capataz: capataz || "",
+                        tower_count: towerCount,
                       });
                     });
                   }

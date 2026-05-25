@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X, ClipboardList } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { usePermissions } from "@/lib/PermissionsContext";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -65,6 +65,7 @@ const FLOOR_OPTIONS = [
 ];
 
 const EMPTY_MEMBER = { name: "", role: "" };
+const TOWER_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
 
 const INITIAL_FORM = {
   project: "",
@@ -119,6 +120,13 @@ function getCrewMembersFromEditItem(editItem) {
   } catch {
     return [{ ...EMPTY_MEMBER }];
   }
+}
+
+function getTowerOptions(towerCount) {
+  const count = Number.isInteger(Number(towerCount)) ? Number(towerCount) : 1;
+  return TOWER_LETTERS.slice(0, Math.min(Math.max(count, 1), TOWER_LETTERS.length)).map(
+    (letter) => `Torre ${letter}`
+  );
 }
 
 export default function MasterItemForm({
@@ -188,6 +196,23 @@ export default function MasterItemForm({
     if (error) setError("");
   };
 
+  const selectedProjectObj = projects.find((p) => p.name === form.project);
+  const towerOptions = getTowerOptions(selectedProjectObj?.tower_count);
+  const isTowerValid = !form.tower || towerOptions.includes(form.tower);
+
+  const handleProjectChange = (value) => {
+    const nextProject = projects.find((project) => project.name === value);
+    const nextTowerOptions = getTowerOptions(nextProject?.tower_count);
+
+    setForm((prev) => ({
+      ...prev,
+      project: value,
+      tower: nextTowerOptions.includes(prev.tower) ? prev.tower : "",
+    }));
+
+    if (error) setError("");
+  };
+
   const updateMember = (index, field, value) => {
     setCrewMembers((prev) =>
       prev.map((member, i) => {
@@ -221,7 +246,11 @@ export default function MasterItemForm({
     }
 
     if (!form.tower.trim()) {
-      return "Debe ingresar una torre.";
+      return "Debe seleccionar una torre.";
+    }
+
+    if (!isTowerValid) {
+      return "Debe seleccionar una torre valida para la obra.";
     }
 
     if (!form.floors || form.floors.length === 0) {
@@ -351,6 +380,7 @@ export default function MasterItemForm({
   const isFormInvalid =
     !form.project ||
     !form.tower.trim() ||
+    !isTowerValid ||
     !form.floors ||
     form.floors.length === 0 ||
     !form.activity.trim() ||
@@ -377,22 +407,6 @@ export default function MasterItemForm({
   const uniqueCrewNames = Array.from(
     new Set(allItems.map((i) => i.crew_name))
   ).filter(Boolean);
-
-  const uniqueMemberNames = Array.from(
-    new Set(
-      allItems.flatMap((i) => {
-        try {
-          const members = JSON.parse(i.crew_members);
-          return Array.isArray(members) ? members.map((m) => m.name) : [];
-        } catch {
-          return [];
-        }
-      })
-    )
-  ).filter(Boolean);
-
-  const selectedProjectObj = projects.find((p) => p.name === form.project);
-  const availableFloors = selectedProjectObj?.floors || [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -422,7 +436,7 @@ export default function MasterItemForm({
               <Label className="text-xs">Proyecto *</Label>
               <Select
                 value={form.project}
-                onValueChange={(value) => updateFormField("project", value)}
+                onValueChange={handleProjectChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar" />
@@ -462,11 +476,27 @@ export default function MasterItemForm({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Torre</Label>
-              <Input
+              <Select
                 value={form.tower}
-                onChange={(e) => updateFormField("tower", e.target.value)}
-                placeholder="Ej: Torre A, Bloque 1..."
-              />
+                onValueChange={(value) => updateFormField("tower", value)}
+                disabled={!form.project}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.project ? "Seleccionar torre" : "Seleccione obra"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {form.tower && !isTowerValid && (
+                    <SelectItem value={form.tower} disabled>
+                      {form.tower} (fuera del rango actual)
+                    </SelectItem>
+                  )}
+                  {towerOptions.map((tower) => (
+                    <SelectItem key={tower} value={tower}>
+                      {tower}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
