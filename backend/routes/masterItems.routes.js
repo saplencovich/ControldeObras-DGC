@@ -359,7 +359,7 @@ router.put("/:id", (req, res) => {
         start_date = ?,
         end_date = ?,
         planned_qty = ?,
-        executed_qty = ?,
+        executed_qty = COALESCE(?, executed_qty),
         unit = ?,
         crew_name = ?,
         crew_size = ?,
@@ -379,7 +379,9 @@ router.put("/:id", (req, res) => {
       start_date || "",
       end_date || "",
       toNumber(planned_qty),
-      toNumber(executed_qty),
+      executed_qty === undefined || executed_qty === null || String(executed_qty).trim() === ""
+        ? null
+        : toNumber(executed_qty),
       unit || "",
       crew_name || "",
       toNumber(crew_size),
@@ -398,25 +400,41 @@ router.put("/:id", (req, res) => {
         return res.status(404).json({ error: "Item no encontrado" });
       }
 
-      res.json({
-        id: Number(id),
-        project: project || "",
-        tower: tower || "",
-        floor: floor || "",
-        activity: activity || "",
-        start_date: start_date || "",
-        end_date: end_date || "",
-        planned_qty: toNumber(planned_qty),
-        executed_qty: toNumber(executed_qty),
-        unit: unit || "",
-        crew_name: crew_name || "",
-        crew_size: toNumber(crew_size),
-        crew_members: stringifyArray(crew_members),
-        restrictions: restrictions || "",
-        observations: observations || "",
-        status: status || "pendiente",
-        release_status: release_status || "no_liberado",
-      });
+      db.run(
+        `
+          UPDATE daily_logs
+          SET project = ?,
+              tower = ?,
+              floor = ?,
+              activity = ?
+          WHERE master_item_id = ?
+        `,
+        [project || "", tower || "", floor || "", activity || "", id],
+        (err) => {
+          if (err) return res.status(500).json({ error: err.message });
+
+          db.get(
+            "SELECT COALESCE(SUM(executed_today), 0) AS executed_qty FROM daily_logs WHERE master_item_id = ?",
+            [id],
+            (err, totals) => {
+              if (err) return res.status(500).json({ error: err.message });
+
+              db.run(
+                "UPDATE master_items SET executed_qty = ? WHERE id = ?",
+                [toNumber(totals?.executed_qty), id],
+                (err) => {
+                  if (err) return res.status(500).json({ error: err.message });
+
+                  db.get("SELECT * FROM master_items WHERE id = ?", [id], (err, updatedItem) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.json(updatedItem);
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
     });
   });
 });

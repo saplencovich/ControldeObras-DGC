@@ -379,6 +379,7 @@ export default function MasterItemForm({
       floor: form.floors && form.floors.length > 0 ? form.floors.join(", ") : "",
       activity: form.activity.trim(),
       planned_qty: Number(form.planned_qty || 0),
+      executed_qty: Number(editItem?.executed_qty || 0),
       unit: form.unit.trim() || "und",
       crew_name: form.crew_name.trim(),
       restrictions: form.restrictions.trim(),
