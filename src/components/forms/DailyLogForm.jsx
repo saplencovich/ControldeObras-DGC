@@ -42,7 +42,7 @@ const SERVER_URL = (
   import.meta.env.VITE_API_URL || "http://localhost:3001/api"
 ).replace(/\/api\/?$/, "");
 
-const REQUIRE_PHOTO = false;
+const REQUIRE_PHOTO = true;
 const REQUIRE_SIGNATURE = true;
 const REQUIRE_CAPATAZ = true;
 

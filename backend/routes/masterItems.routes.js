@@ -3,6 +3,14 @@ const db = require("../db/connection");
 
 const router = express.Router();
 const TOWER_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+const ACTIVITY_OPTIONS = [
+  "Artefactos",
+  "Luminarias",
+  "Canalización",
+  "Cableado",
+  "Tableros",
+];
+
 
 function toNumber(value) {
   return Number(value || 0);
@@ -74,6 +82,10 @@ function validateMasterItemPayload(payload) {
 
   if (!payload.planned_qty || toNumber(payload.planned_qty) <= 0) {
     return "Debe ingresar una cantidad planificada mayor a 0";
+  }
+
+  if (!ACTIVITY_OPTIONS.includes(payload.activity)) {
+    return "Debe seleccionar una actividad del catalogo definido";
   }
 
   const crewMembers = safeParseArray(payload.crew_members).filter(

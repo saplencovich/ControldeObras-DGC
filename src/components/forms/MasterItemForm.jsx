@@ -59,6 +59,7 @@ const FLOOR_OPTIONS = [
   { label: "Subterráneo 2", value: "Subterráneo 2" },
   { label: "Subterráneo 3", value: "Subterráneo 3" },
   { label: "Subterráneo 4", value: "Subterráneo 4" },
+  { label: "Subterráneo 5", value: "Subterráneo 5" },
   { label: "Cubierta", value: "Cubierta" },
   { label: "Exteriores", value: "Exteriores" },
   { label: "Áreas Comunes", value: "Áreas Comunes" },
@@ -66,6 +67,13 @@ const FLOOR_OPTIONS = [
 
 const EMPTY_MEMBER = { name: "", role: "" };
 const TOWER_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+const ACTIVITY_OPTIONS = [
+  "Artefactos",
+  "Luminarias",
+  "Canalización",
+  "Cableado",
+  "Tableros",
+];
 
 const INITIAL_FORM = {
   project: "",
@@ -129,6 +137,42 @@ function getTowerOptions(towerCount) {
   );
 }
 
+function normalizeCatalogValue(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function getCatalogOptions(values) {
+  const optionsByKey = new Map();
+
+  values.forEach((value) => {
+    const cleanValue = String(value || "").trim().replace(/\s+/g, " ");
+    const key = normalizeCatalogValue(cleanValue);
+
+    if (key && !optionsByKey.has(key)) {
+      optionsByKey.set(key, cleanValue);
+    }
+  });
+
+  return Array.from(optionsByKey.values());
+}
+
+function findCatalogConflict(value, options) {
+  const cleanValue = String(value || "").trim().replace(/\s+/g, " ");
+  const key = normalizeCatalogValue(cleanValue);
+
+  if (!key) return null;
+
+  const existing = options.find((option) => normalizeCatalogValue(option) === key);
+  if (!existing || existing === cleanValue) return null;
+
+  return existing;
+}
+
 export default function MasterItemForm({
   open,
   onClose,
@@ -162,6 +206,8 @@ export default function MasterItemForm({
   const currentProjectWorkers = projectWorkers.filter(
     (w) => w.project === form.project
   );
+  const uniqueCrewNames = getCatalogOptions(allItems.map((i) => i.crew_name));
+  const crewCatalogConflict = findCatalogConflict(form.crew_name, uniqueCrewNames);
 
   useEffect(() => {
     if (!open) return;
@@ -199,6 +245,7 @@ export default function MasterItemForm({
   const selectedProjectObj = projects.find((p) => p.name === form.project);
   const towerOptions = getTowerOptions(selectedProjectObj?.tower_count);
   const isTowerValid = !form.tower || towerOptions.includes(form.tower);
+  const isActivityValid = !form.activity || ACTIVITY_OPTIONS.includes(form.activity);
 
   const handleProjectChange = (value) => {
     const nextProject = projects.find((project) => project.name === value);
@@ -258,7 +305,11 @@ export default function MasterItemForm({
     }
 
     if (!form.activity.trim()) {
-      return "Debe ingresar una actividad.";
+      return "Debe seleccionar una actividad.";
+    }
+
+    if (!isActivityValid) {
+      return "Debe seleccionar una actividad del catalogo definido.";
     }
 
     if (!form.start_date) {
@@ -279,6 +330,10 @@ export default function MasterItemForm({
 
     if (!form.crew_name.trim()) {
       return "Debe ingresar el nombre de la cuadrilla.";
+    }
+
+    if (crewCatalogConflict) {
+      return `La cuadrilla ya existe como "${crewCatalogConflict}". Usa ese nombre para evitar duplicados por mayusculas o tildes.`;
     }
 
     const filledMembers = crewMembers.filter((member) => member.name.trim() || member.role.trim());
@@ -384,12 +439,14 @@ export default function MasterItemForm({
     !form.floors ||
     form.floors.length === 0 ||
     !form.activity.trim() ||
+    !isActivityValid ||
     !form.start_date ||
     !form.end_date ||
     !form.planned_qty ||
     Number(form.planned_qty) <= 0 ||
     !form.unit.trim() ||
     !form.crew_name.trim() ||
+    Boolean(crewCatalogConflict) ||
     validMemberCount === 0 ||
     crewMembers.some((member) => {
       const hasAnyValue = member.name.trim() || member.role.trim();
@@ -399,14 +456,6 @@ export default function MasterItemForm({
     !form.release_status ||
     !form.observations.trim() ||
     saving;
-
-  const uniqueActivities = Array.from(
-    new Set(allItems.map((i) => i.activity))
-  ).filter(Boolean);
-
-  const uniqueCrewNames = Array.from(
-    new Set(allItems.map((i) => i.crew_name))
-  ).filter(Boolean);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -437,6 +486,7 @@ export default function MasterItemForm({
               <Select
                 value={form.project}
                 onValueChange={handleProjectChange}
+                disabled={Boolean(editItem)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar" />
@@ -453,12 +503,27 @@ export default function MasterItemForm({
 
             <div>
               <Label className="text-xs">Actividad *</Label>
-              <AutocompleteInput
+              <Select
                 value={form.activity}
-                onChange={(e) => updateFormField("activity", e.target.value)}
-                options={uniqueActivities}
-                placeholder="Ej: Artefactos, Luminarias..."
-              />
+                onValueChange={(value) => updateFormField("activity", value)}
+                disabled={Boolean(editItem)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar actividad" />
+                </SelectTrigger>
+                <SelectContent>
+                  {form.activity && !isActivityValid && (
+                    <SelectItem value={form.activity} disabled>
+                      {form.activity} (fuera del catalogo)
+                    </SelectItem>
+                  )}
+                  {ACTIVITY_OPTIONS.map((activity) => (
+                    <SelectItem key={activity} value={activity}>
+                      {activity}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -561,6 +626,11 @@ export default function MasterItemForm({
               options={uniqueCrewNames}
               placeholder="Ej: Cuadrilla Reyes"
             />
+            {crewCatalogConflict && (
+              <p className="mt-1 text-xs text-red-600">
+                Ya existe como "{crewCatalogConflict}". Usa ese texto.
+              </p>
+            )}
           </div>
 
           <div>
