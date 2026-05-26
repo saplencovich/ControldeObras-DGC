@@ -114,12 +114,28 @@ export default function Workers() {
   dailyLogs.forEach((log) => {
     log.crew_workers?.forEach((w) => {
       if (!w.name) return;
+      const crewName = log.crew_name || 'Sin cuadrilla asignada';
       if (!workerProductivity[w.name]) {
-        workerProductivity[w.name] = { hours: 0, executed: 0, days: 0 };
+        workerProductivity[w.name] = {
+          hours: 0,
+          executed: 0,
+          days: 0,
+          crews: {},
+        };
+      }
+      if (!workerProductivity[w.name].crews[crewName]) {
+        workerProductivity[w.name].crews[crewName] = {
+          hours: 0,
+          executed: 0,
+          days: 0,
+        };
       }
       workerProductivity[w.name].hours += w.hours || 0;
       workerProductivity[w.name].executed += w.executed || 0;
       workerProductivity[w.name].days += 1;
+      workerProductivity[w.name].crews[crewName].hours += w.hours || 0;
+      workerProductivity[w.name].crews[crewName].executed += w.executed || 0;
+      workerProductivity[w.name].crews[crewName].days += 1;
     });
   });
 
@@ -478,6 +494,7 @@ export default function Workers() {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="text-xs">Nombre</TableHead>
+                      <TableHead className="text-xs">Cuadrilla</TableHead>
                       <TableHead className="text-xs text-right">Jornadas</TableHead>
                       <TableHead className="text-xs text-right">Horas Total</TableHead>
                       <TableHead className="text-xs text-right">Ejecutado Total</TableHead>
@@ -488,7 +505,7 @@ export default function Workers() {
                   <TableBody>
                     {Object.keys(workerProductivity).length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-12">
+                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-12">
                           Sin datos. Registra personal en los reportes diarios para ver productividad.
                         </TableCell>
                       </TableRow>
@@ -498,14 +515,39 @@ export default function Workers() {
                       .sort((a, b) => b[1].hours - a[1].hours)
                       .map(([name, p]) => {
                         const rend = p.hours > 0 ? (p.executed / p.hours).toFixed(2) : '—';
+                        const crewBreakdown = Object.entries(p.crews || {})
+                          .map(([crew, data]) => ({
+                            crew,
+                            ...data,
+                            rend: data.hours > 0 ? (data.executed / data.hours).toFixed(2) : '—',
+                          }))
+                          .sort((a, b) => b.executed - a.executed);
+                        const crewLabel =
+                          crewBreakdown.length === 1
+                            ? crewBreakdown[0].crew
+                            : `${crewBreakdown.length} cuadrillas`;
+
                         return (
-                          <TableRow key={name} className="hover:bg-muted/30 text-xs">
+                          <React.Fragment key={name}>
+                          <TableRow className="hover:bg-muted/30 text-xs">
                             <TableCell className="font-medium">{name}</TableCell>
+                            <TableCell className="text-muted-foreground text-[11px]">{crewLabel}</TableCell>
                             <TableCell className="text-right">{p.days}</TableCell>
                             <TableCell className="text-right">{p.hours}h</TableCell>
                             <TableCell className="text-right font-mono font-medium">{p.executed}</TableCell>
                             <TableCell className="text-right font-mono">{rend}</TableCell>
                           </TableRow>
+                          {crewBreakdown.length > 1 &&
+                            crewBreakdown.map((crew) => (
+                              <TableRow key={`${name}-${crew.crew}`} className="bg-muted/20 text-xs text-muted-foreground">
+                                <TableCell className="pl-8" colSpan={2}>Detalle por cuadrilla: {crew.crew}</TableCell>
+                                <TableCell className="text-right">{crew.days}</TableCell>
+                                <TableCell className="text-right">{crew.hours}h</TableCell>
+                                <TableCell className="text-right font-mono">{crew.executed}</TableCell>
+                                <TableCell className="text-right font-mono">{crew.rend}</TableCell>
+                              </TableRow>
+                            ))}
+                          </React.Fragment>
                         );
                       })}
                   </TableBody>

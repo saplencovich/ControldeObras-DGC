@@ -161,28 +161,55 @@ export default function ProductivityAnalytics() {
       log.crew_workers?.forEach(w => {
         if (!w.name) return;
         const key = `${w.name}|${w.role}`;
+        const crewName = log.crew_name || 'Sin cuadrilla asignada';
+
         if (!workers[key]) {
           workers[key] = {
             name: w.name,
             role: w.role,
-            crew: log.crew_name,
             hours: 0,
             executed: 0,
-            days: 0
+            days: 0,
+            crews: {},
           };
         }
+
+        if (!workers[key].crews[crewName]) {
+          workers[key].crews[crewName] = {
+            crew: crewName,
+            hours: 0,
+            executed: 0,
+            days: 0,
+          };
+        }
+
         workers[key].hours += w.hours || 0;
         workers[key].executed += w.executed || 0;
         workers[key].days += 1;
+        workers[key].crews[crewName].hours += w.hours || 0;
+        workers[key].crews[crewName].executed += w.executed || 0;
+        workers[key].crews[crewName].days += 1;
       });
     });
 
     return Object.values(workers)
-      .map(w => ({
-        ...w,
-        productivity: w.hours > 0 ? (w.executed / w.hours).toFixed(2) : 0,
-        avgPerDay: (w.executed / w.days).toFixed(1),
-      }))
+      .map(w => {
+        const crewBreakdown = Object.values(w.crews)
+          .map(crew => ({
+            ...crew,
+            productivity: crew.hours > 0 ? (crew.executed / crew.hours).toFixed(2) : 0,
+            avgPerDay: crew.days > 0 ? (crew.executed / crew.days).toFixed(1) : 0,
+          }))
+          .sort((a, b) => b.executed - a.executed);
+
+        return {
+          ...w,
+          crew: crewBreakdown.length === 1 ? crewBreakdown[0].crew : `${crewBreakdown.length} cuadrillas`,
+          crewBreakdown,
+          productivity: w.hours > 0 ? (w.executed / w.hours).toFixed(2) : 0,
+          avgPerDay: w.days > 0 ? (w.executed / w.days).toFixed(1) : 0,
+        };
+      })
       .sort((a, b) => b.executed - a.executed);
   }, [selectedLogs]);
 
@@ -415,7 +442,8 @@ export default function ProductivityAnalytics() {
                 </thead>
                 <tbody>
                   {workerProductivity.map((w, idx) => (
-                    <tr key={idx} className="border-b hover:bg-muted/30">
+                    <React.Fragment key={`${w.name}-${w.role || ''}-${idx}`}>
+                    <tr className="border-b hover:bg-muted/30">
                       <td className="px-3 py-2 font-medium">{w.name}</td>
                       <td className="px-3 py-2 text-muted-foreground">{w.role || '—'}</td>
                       <td className="px-3 py-2 text-muted-foreground text-[11px]">{w.crew || '—'}</td>
@@ -425,6 +453,24 @@ export default function ProductivityAnalytics() {
                       <td className="px-3 py-2 text-right font-mono font-semibold text-accent">{w.productivity} /h</td>
                       <td className="px-3 py-2 text-right">{w.avgPerDay}</td>
                     </tr>
+                    {w.crewBreakdown.length > 1 &&
+                      w.crewBreakdown.map((crew) => (
+                        <tr
+                          key={`${w.name}-${w.role || ''}-${crew.crew}`}
+                          className="border-b bg-muted/20 text-muted-foreground"
+                        >
+                          <td className="px-3 py-1.5 pl-8 text-[11px]" colSpan={2}>
+                            Detalle por cuadrilla
+                          </td>
+                          <td className="px-3 py-1.5 text-[11px]">{crew.crew}</td>
+                          <td className="px-3 py-1.5 text-right">{crew.days}</td>
+                          <td className="px-3 py-1.5 text-right font-mono">{crew.executed}</td>
+                          <td className="px-3 py-1.5 text-right">{crew.hours}h</td>
+                          <td className="px-3 py-1.5 text-right font-mono">{crew.productivity} /h</td>
+                          <td className="px-3 py-1.5 text-right">{crew.avgPerDay}</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

@@ -341,6 +341,10 @@ export default function MasterItemForm({
       return "Debe agregar al menos una persona en Integrantes de la Cuadrilla.";
     }
 
+    if (hasDuplicateMembers) {
+      return "No se puede repetir el mismo integrante dentro de la cuadrilla.";
+    }
+
     if (filledMembers.some((member) => !member.name.trim() || !member.role.trim())) {
       return "Cada integrante de la cuadrilla debe tener nombre y cargo.";
     }
@@ -431,6 +435,13 @@ export default function MasterItemForm({
   const validMemberCount = crewMembers.filter((member) =>
     member.name.trim() && member.role.trim()
   ).length;
+  const selectedMemberNames = crewMembers
+    .map((member) => member.name.trim())
+    .filter(Boolean);
+  const duplicateMemberNames = selectedMemberNames.filter(
+    (name, index) => selectedMemberNames.indexOf(name) !== index
+  );
+  const hasDuplicateMembers = duplicateMemberNames.length > 0;
 
   const isFormInvalid =
     !form.project ||
@@ -448,6 +459,7 @@ export default function MasterItemForm({
     !form.crew_name.trim() ||
     Boolean(crewCatalogConflict) ||
     validMemberCount === 0 ||
+    hasDuplicateMembers ||
     crewMembers.some((member) => {
       const hasAnyValue = member.name.trim() || member.role.trim();
       return hasAnyValue && (!member.name.trim() || !member.role.trim());
@@ -657,8 +669,25 @@ export default function MasterItemForm({
               </Button>
             </div>
 
+            {hasDuplicateMembers && (
+              <p className="mb-2 text-xs text-red-600">
+                Hay integrantes repetidos. Selecciona una persona distinta en cada fila.
+              </p>
+            )}
+
             <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
-              {crewMembers.map((member, index) => (
+              {crewMembers.map((member, index) => {
+                const selectedOtherMemberNames = new Set(
+                  crewMembers
+                    .filter((_, memberIndex) => memberIndex !== index)
+                    .map((crewMember) => crewMember.name)
+                    .filter(Boolean)
+                );
+                const availableWorkers = currentProjectWorkers.filter(
+                  (worker) => !selectedOtherMemberNames.has(worker.name)
+                );
+
+                return (
                 <div key={index} className="flex items-center gap-2">
                   <Select
                     value={member.name}
@@ -677,8 +706,12 @@ export default function MasterItemForm({
                         <SelectItem value="__none_w__" disabled className="text-xs">
                           Sin personal registrado
                         </SelectItem>
+                      ) : availableWorkers.length === 0 ? (
+                        <SelectItem value="__none_available_w__" disabled className="text-xs">
+                          Sin integrantes disponibles
+                        </SelectItem>
                       ) : (
-                        currentProjectWorkers.map((w) => (
+                        availableWorkers.map((w) => (
                           <SelectItem key={w.id} value={w.name} className="text-xs">
                             {w.name}
                           </SelectItem>
@@ -705,7 +738,8 @@ export default function MasterItemForm({
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

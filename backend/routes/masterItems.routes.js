@@ -94,6 +94,12 @@ function validateMasterItemPayload(payload) {
   if (crewMembers.length === 0) {
     return "Debe agregar al menos una persona en Integrantes de la Cuadrilla";
   }
+  const crewMemberNames = crewMembers
+    .map((member) => String(member?.name || "").trim())
+    .filter(Boolean);
+  if (new Set(crewMemberNames).size !== crewMemberNames.length) {
+    return "No se puede repetir el mismo integrante dentro de la cuadrilla";
+  }
   if (crewMembers.some((member) => isBlank(member?.name) || isBlank(member?.role))) {
     return "Cada integrante de la cuadrilla debe tener nombre y cargo";
   }
