@@ -60,9 +60,6 @@ const FLOOR_OPTIONS = [
   { label: "Subterráneo 3", value: "Subterráneo 3" },
   { label: "Subterráneo 4", value: "Subterráneo 4" },
   { label: "Subterráneo 5", value: "Subterráneo 5" },
-  { label: "Cubierta", value: "Cubierta" },
-  { label: "Exteriores", value: "Exteriores" },
-  { label: "Áreas Comunes", value: "Áreas Comunes" },
 ];
 
 const EMPTY_MEMBER = { name: "", role: "" };
