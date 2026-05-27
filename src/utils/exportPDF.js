@@ -564,14 +564,14 @@ export async function exportReportPDF(
       }
 
       if (log.observations) {
-        const oLines = doc.splitTextToSize(log.observations, CW - 10);
-        const oH = oLines.length * 4 + 5;
+        const oLines = doc.splitTextToSize(log.observations, CW - 8);
+        const oH = oLines.length * 4 + 11;
         y = ensureSpace(doc, y, oH + 3, today, logoData, REPORT_SIGNATURE_TOP);
         doc.setFillColor(245, 248, 255); doc.roundedRect(M, y, CW, oH, 1, 1, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(40, 60, 110);
         doc.text('Observaciones:', M + 4, y + 4.5);
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(50, 60, 80);
-        doc.text(oLines, M + 14, y + 4.5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(50, 60, 80);
+        doc.text(oLines, M + 4, y + 9);
         y += oH + 3;
       }
 
